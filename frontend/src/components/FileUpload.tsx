@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { Document } from '../App';
+import { API_ENDPOINTS } from '../config/api';
 
 interface FileUploadProps {
   onFileUploaded: (document: Document) => void;
@@ -45,7 +46,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
     formData.append('file', selectedFile);
 
     try {
-      const response = await fetch('http://localhost:3001/api/upload', {
+      const response = await fetch(API_ENDPOINTS.upload, {
         method: 'POST',
         body: formData,
       });

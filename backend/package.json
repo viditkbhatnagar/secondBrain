@@ -6,12 +6,12 @@
     "scripts": {
         "start": "node dist/server.js",
         "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-        "build": "tsc",
+        "build": "npm install --production=false && tsc",
+        "postbuild": "mkdir -p dist/uploads",
         "test": "jest"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.27.0",
-        "@types/mongoose": "^5.11.96",
         "bcryptjs": "^2.4.3",
         "cors": "^2.8.5",
         "dotenv": "^16.4.0",
@@ -19,26 +19,28 @@
         "fs-extra": "^11.2.0",
         "jsonwebtoken": "^9.0.2",
         "mammoth": "^1.7.0",
-        "mongodb": "^6.18.0",
-        "mongoose": "^8.17.0",
+        "mongoose": "^8.8.0",
         "multer": "^1.4.5-lts.1",
         "openai": "^4.67.0",
         "pdf-parse": "^1.1.1",
         "uuid": "^10.0.0"
     },
     "devDependencies": {
-        "@types/bcryptjs": "^2.4.0",
-        "@types/cors": "^2.8.0",
-        "@types/express": "^4.17.0",
-        "@types/fs-extra": "^11.0.0",
-        "@types/jest": "^29.0.0",
-        "@types/jsonwebtoken": "^9.0.0",
-        "@types/multer": "^1.4.0",
+        "@types/bcryptjs": "^2.4.6",
+        "@types/cors": "^2.8.17",
+        "@types/express": "^4.17.21",
+        "@types/fs-extra": "^11.0.4",
+        "@types/jest": "^29.5.0",
+        "@types/jsonwebtoken": "^9.0.7",
+        "@types/multer": "^1.4.12",
         "@types/node": "^20.0.0",
-        "@types/pg": "^8.10.0",
-        "@types/uuid": "^9.0.0",
-        "jest": "^29.0.0",
+        "@types/pdf-parse": "^1.1.5",
+        "@types/uuid": "^10.0.0",
+        "jest": "^29.7.0",
         "ts-node-dev": "^2.0.0",
-        "typescript": "^5.0.0"
+        "typescript": "^5.6.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
     }
 }

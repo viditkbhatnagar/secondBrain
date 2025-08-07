@@ -4,6 +4,7 @@ import { SearchInterface } from './components/SearchInterface';
 import { DocumentLibrary } from './components/DocumentLibrary';
 import { SearchResults } from './components/SearchResults';
 import { Brain, Search, Library, Upload } from 'lucide-react';
+import { API_ENDPOINTS } from './config/api';
 import './App.css';
 
 export interface Document {
@@ -48,7 +49,7 @@ function App() {
 
   const loadDocuments = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/documents');
+      const response = await fetch(API_ENDPOINTS.documents);
       if (response.ok) {
         const docs = await response.json();
         setDocuments(docs);
@@ -60,7 +61,7 @@ function App() {
 
   const loadStats = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/documents/stats');
+      const response = await fetch(API_ENDPOINTS.documentsStats);
       if (response.ok) {
         const statsData = await response.json();
         setStats(statsData);
@@ -86,7 +87,7 @@ function App() {
     setSearchResults(null);
     
     try {
-      const response = await fetch('http://localhost:3001/api/search', {
+      const response = await fetch(API_ENDPOINTS.search, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -149,7 +150,7 @@ function App() {
 
   const handleDeleteDocument = async (documentId: string) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/documents/${documentId}`, {
+      const response = await fetch(`${API_ENDPOINTS.documents}/${documentId}`, {
         method: 'DELETE',
       });
       

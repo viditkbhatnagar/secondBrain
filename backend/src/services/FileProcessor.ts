@@ -90,7 +90,7 @@ export class FileProcessor {
       return processedDoc;
     } catch (error) {
       console.error('Error processing file:', error);
-      throw new Error(`Failed to process file: ${error.message}`);
+      throw new Error(`Failed to process file: ${error}`);
     }
   }
 
