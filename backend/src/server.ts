@@ -58,17 +58,53 @@ app.use('/api/search', searchRouter);
 app.use('/api/documents', documentsRouter);
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  try {
+    // Basic health check
+    const health = {
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      mongodb: 'connected'
+    };
+    
+    res.json(health);
+  } catch (error) {
+    res.status(503).json({
+      status: 'ERROR',
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // Error handling middleware
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', error);
-  res.status(500).json({ 
-    error: 'Internal server error', 
-    message: error.message 
-  });
+  
+  let errorResponse = {
+    error: 'Internal server error',
+    message: 'An unexpected error occurred'
+  };
+
+  // Handle specific error types
+  if (error.message?.includes('Invalid file type')) {
+    errorResponse = {
+      error: 'Invalid file type',
+      message: 'Only PDF, DOCX, TXT, and MD files are allowed'
+    };
+    return res.status(400).json(errorResponse);
+  }
+
+  if (error.code === 'LIMIT_FILE_SIZE') {
+    errorResponse = {
+      error: 'File too large',
+      message: 'File size must be less than 50MB'
+    };
+    return res.status(413).json(errorResponse);
+  }
+
+  res.status(500).json(errorResponse);
 });
 
 // Initialize services and start server
@@ -83,24 +119,35 @@ async function startServer() {
       throw new Error('OPENAI_API_KEY is required for embeddings. Please add it to your .env file.');
     }
 
-    // Initialize services
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is required. Please add your MongoDB connection string to your .env file.');
+    }
+
+    console.log('🚀 Starting Personal Knowledge Base Server...');
+
+    // Initialize services in order
     ClaudeService.initialize();
-    console.log('Claude service initialized');
+    console.log('✅ Claude service initialized');
 
-    // Initialize database
     await DatabaseService.initialize();
-    console.log('Database initialized');
+    console.log('✅ Database service initialized');
 
-    // Initialize vector service
     await VectorService.initialize();
-    console.log('Vector service initialized');
+    console.log('✅ Vector service initialized');
 
     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log(`Health check: http://localhost:${PORT}/api/health`);
+      console.log(`🌟 Server running on port ${PORT}`);
+      console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`🔍 API endpoints:`);
+      console.log(`   📤 Upload: POST /api/upload`);
+      console.log(`   🔎 Search: POST /api/search`);
+      console.log(`   📁 Documents: GET /api/documents`);
+      console.log(`   📊 Stats: GET /api/documents/stats`);
+      console.log('');
+      console.log('🎉 Personal Knowledge Base is ready!');
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 }

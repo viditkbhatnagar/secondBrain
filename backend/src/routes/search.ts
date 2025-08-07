@@ -1,6 +1,7 @@
 import express from 'express';
 import { VectorService } from '../services/VectorService';
 import { ClaudeService } from '../services/ClaudeService';
+import { DatabaseService } from '../services/DatabaseService';
 
 export const searchRouter = express.Router();
 
@@ -35,7 +36,7 @@ searchRouter.post('/', async (req, res) => {
     console.log(`Processing search query: "${query}"`);
 
     // Check if any documents exist
-    const documentStats = VectorService.getDocumentStats();
+    const documentStats = await VectorService.getDocumentStats();
     if (documentStats.length === 0) {
       return res.status(404).json({
         error: 'No Documents Available',
@@ -57,7 +58,17 @@ searchRouter.post('/', async (req, res) => {
     }
 
     // Generate answer using Claude
+    const startTime = Date.now();
     const searchResult = await ClaudeService.answerQuestion(query, relevantChunks);
+    const responseTime = Date.now() - startTime;
+
+    // Log search query for analytics
+    await DatabaseService.logSearchQuery(
+      query, 
+      relevantChunks.length, 
+      searchResult.confidence, 
+      responseTime
+    );
 
     console.log(`Generated answer with ${searchResult.confidence}% confidence`);
 

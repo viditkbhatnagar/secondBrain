@@ -79,7 +79,8 @@ fileUploadRouter.post('/', async (req, res) => {
       summary,
       topics,
       metadata: processedDocument.metadata,
-      chunkCount: processedDocument.chunks.length
+      chunkCount: processedDocument.chunks.length,
+      fileSize: req.file.size // Add file size from multer
     });
 
     // Clean up the uploaded file

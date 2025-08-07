@@ -74,14 +74,17 @@ documentsRouter.delete('/:id', async (req, res) => {
 // Get statistics
 documentsRouter.get('/stats', async (req, res) => {
   try {
-    const documentStats = VectorService.getDocumentStats();
-    const totalDocuments = documentStats.length;
-    const totalChunks = documentStats.reduce((sum, doc) => sum + doc.chunkCount, 0);
+    const stats = await DatabaseService.getStats();
+    const vectorCount = await VectorService.getVectorCount();
     
     res.json({
-      totalDocuments,
-      totalChunks,
-      documents: documentStats
+      totalDocuments: stats.totalDocuments,
+      totalChunks: vectorCount,
+      totalWords: stats.totalWords,
+      totalSizeMB: stats.totalSizeMB,
+      averageWordsPerDocument: stats.averageWordsPerDocument,
+      recentUploads: stats.recentUploads,
+      topTopics: stats.topTopics
     });
   } catch (error) {
     console.error('Error fetching stats:', error);
