@@ -601,12 +601,19 @@ This application uses two paid API services that determine the operating costs:
 - **Total per document**: **~$0.00131**
 
 #### Per Search Query:
-- **OpenAI Query Embedding**: ~50 tokens = **$0.000001**
+- **OpenAI Query Embedding**: ~20 tokens = **$0.0000004**
 - **Claude Answer Generation**:
   - Input: ~2000 tokens (query + relevant chunks)
   - Output: ~200 tokens (answer)
   - Cost: (2000 × $0.00025) + (200 × $0.00125) = **$0.00075**
 - **Total per search**: **~$0.00075**
+
+#### Specific Cost for 10-15 Word Search Queries:
+- **Query size**: 10-15 words ≈ 15-20 tokens
+- **OpenAI embedding**: 20 tokens = **$0.0000004**
+- **Claude processing**: Same as above = **$0.00075** 
+- **Total cost per 10-15 word query**: **~$0.00075**
+- **Queries possible with $10**: ~13,333 queries
 
 ### Cost Estimates with $10 Credit
 
