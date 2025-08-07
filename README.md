@@ -558,6 +558,101 @@ The system implements a Retrieval-Augmented Generation (RAG) architecture:
 
 This architecture ensures accurate, contextual responses based on the user's specific document corpus while maintaining high performance and scalability.
 
+## Estimated Pricing of Running This App
+
+### Cost Components Overview
+
+This application uses two paid API services that determine the operating costs:
+
+#### 1. **OpenAI API (Embeddings) - CHARGED**
+- **Service**: Text-embedding-3-small model
+- **Usage**: Generates 1536-dimensional vectors for document chunks and search queries
+- **Cost**: $0.00002 per 1K tokens (as of 2024)
+- **When it's used**:
+  - Document upload: For every chunk created from uploaded documents
+  - Search queries: For each search query to generate query embeddings
+
+#### 2. **Anthropic Claude API (AI Responses) - CHARGED**
+- **Service**: Claude-3-haiku-20240307 model  
+- **Usage**: Generates document summaries, extracts topics, and answers search queries
+- **Cost**: $0.00025 per 1K input tokens, $0.00125 per 1K output tokens (as of 2024)
+- **When it's used**:
+  - Document upload: Generating summary and topic extraction per document
+  - Search queries: Generating natural language answers based on relevant chunks
+
+#### 3. **Free Components - NOT CHARGED**
+- Document storage (MongoDB)
+- File upload processing
+- Vector similarity calculations
+- Web interface usage
+- Document management (view/delete)
+
+### Detailed Cost Breakdown
+
+#### Per Document Upload (4-5 pages, ~2000 words):
+- **Text Processing**: Splits into ~6 chunks (1000 words each with overlap)
+- **OpenAI Embeddings**: 
+  - 6 chunks × ~1000 tokens = ~6K tokens
+  - Cost: 6 × $0.00002 = **$0.00012**
+- **Claude Summary & Topics**:
+  - Input: ~2000 tokens for summary, ~2000 tokens for topics
+  - Output: ~100 tokens summary, ~50 tokens topics  
+  - Cost: (4K × $0.00025) + (150 × $0.00125) = **$0.00119**
+- **Total per document**: **~$0.00131**
+
+#### Per Search Query:
+- **OpenAI Query Embedding**: ~50 tokens = **$0.000001**
+- **Claude Answer Generation**:
+  - Input: ~2000 tokens (query + relevant chunks)
+  - Output: ~200 tokens (answer)
+  - Cost: (2000 × $0.00025) + (200 × $0.00125) = **$0.00075**
+- **Total per search**: **~$0.00075**
+
+### Cost Estimates with $10 Credit
+
+#### Document Upload Capacity:
+- **Maximum documents**: $10 ÷ $0.00131 = **~7,633 documents**
+- **Total pages**: 7,633 × 4.5 pages = **~34,349 pages**
+- **Storage capacity**: Approximately 15+ million words of content
+
+#### Search Query Capacity:
+- **If only searching**: $10 ÷ $0.00075 = **~13,333 search queries**
+
+#### Mixed Usage Example (Recommended):
+- **1,000 documents** (4-5 pages each): $1.31
+- **Remaining budget for searches**: $8.69
+- **Available search queries**: ~11,587 queries
+- **Total content searchable**: ~4,500 pages
+
+### Cost Optimization Tips:
+
+1. **Batch Uploads**: Upload multiple documents in one session to optimize API usage
+2. **Efficient Queries**: More specific queries use fewer tokens than very broad ones
+3. **Document Quality**: Clean, well-formatted documents process more efficiently
+4. **Query Patterns**: Cache common queries results in your application layer
+
+### Monthly Cost Scenarios:
+
+#### Light Usage (Personal):
+- 50 documents/month + 200 searches/month
+- Cost: **~$0.22/month**
+
+#### Medium Usage (Small Team):
+- 200 documents/month + 1000 searches/month  
+- Cost: **~$1.01/month**
+
+#### Heavy Usage (Research/Enterprise):
+- 1000 documents/month + 5000 searches/month
+- Cost: **~$5.06/month**
+
+### Important Notes:
+
+- Costs are estimates based on current API pricing (2024)
+- Actual costs may vary based on document complexity and query patterns
+- API pricing may change - always check current rates
+- Consider implementing usage monitoring in production
+- Local storage and processing are free - only API calls cost money
+
 ## License
 
 MIT License - see LICENSE file for details
