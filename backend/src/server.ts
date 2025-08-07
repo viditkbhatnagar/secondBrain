@@ -16,10 +16,25 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Middleware with increased limits for large files
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://knowledge-base-frontend-xxx.onrender.com'] // Replace with your frontend URL
+    : ['http://localhost:3000'],
+  credentials: true
+}));
+app.use(express.json({ limit: '100mb' })); // Increased from 50mb
+app.use(express.urlencoded({ extended: true, limit: '100mb' })); // Increased from 50mb
+
+// Add request timeout middleware
+app.use((req, res, next) => {
+  // Set timeout to 5 minutes for file uploads
+  if (req.path.includes('/upload')) {
+    req.setTimeout(300000); // 5 minutes
+    res.setTimeout(300000); // 5 minutes
+  }
+  next();
+});
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -39,9 +54,12 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
+    fileSize: 100 * 1024 * 1024, // Increased to 100MB limit
+    fieldSize: 100 * 1024 * 1024 // Field size limit
   },
   fileFilter: (req, file, cb) => {
+    console.log(`📁 Uploading file: ${file.originalname} (${file.mimetype})`);
+    
     const allowedTypes = ['.pdf', '.docx', '.txt', '.md'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowedTypes.includes(ext)) {

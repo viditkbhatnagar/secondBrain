@@ -33,7 +33,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       'text/plain': ['.txt'],
       'text/markdown': ['.md']
     },
-    maxSize: 50 * 1024 * 1024, // 50MB
+    maxSize: 100 * 1024 * 1024, // Increased to 100MB
     multiple: false
   });
 
@@ -46,10 +46,22 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
     formData.append('file', selectedFile);
 
     try {
+      // Create AbortController for timeout handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
+
+      console.log(`📁 Uploading file: ${selectedFile.name} (${formatFileSize(selectedFile.size)})`);
+
       const response = await fetch(API_ENDPOINTS.upload, {
         method: 'POST',
         body: formData,
+        signal: controller.signal,
+        headers: {
+          // Don't set Content-Type - let browser set it with boundary for FormData
+        }
       });
+
+      clearTimeout(timeoutId);
 
       const result = await response.json();
 
@@ -63,8 +75,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
         message: 'Processing document and generating AI summary...' 
       });
 
-      // Simulate processing time for better UX
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Simulate processing time for better UX (shorter for large files)
+      const processingDelay = selectedFile.size > 5 * 1024 * 1024 ? 500 : 1000;
+      await new Promise(resolve => setTimeout(resolve, processingDelay));
       
       setUploadStatus({ 
         status: 'success', 
@@ -89,7 +102,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       // Handle specific error messages from backend
       const message = error.message || '';
       
-      if (message.includes('Configuration Error') || message.includes('invalid')) {
+      if (error.name === 'AbortError') {
+        errorMessage = 'Upload timed out. Please try with a smaller file or check your connection.';
+      } else if (message.includes('Configuration Error') || message.includes('invalid')) {
         errorMessage = 'Service configuration error. Please contact the administrator.';
         isRetryable = false;
       } else if (message.includes('rate limit')) {
@@ -105,12 +120,14 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       } else if (message.includes('Empty Document')) {
         errorMessage = 'The document appears to be empty or corrupted.';
         isRetryable = false;
-      } else if (message.includes('File Processing Failed')) {
-        errorMessage = 'Failed to process the file. It may be corrupted or password-protected.';
+      } else if (message.includes('File Processing Failed') || message.includes('insufficient text')) {
+        errorMessage = 'Failed to extract text from the file. It may be corrupted, password-protected, or image-only.';
         isRetryable = false;
       } else if (message.includes('too large')) {
-        errorMessage = 'File is too large. Please upload a smaller file.';
+        errorMessage = 'File is too large. Please upload a file smaller than 100MB.';
         isRetryable = false;
+      } else if (message.includes('NetworkError') || message.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
       }
       
       setUploadStatus({ 
@@ -189,7 +206,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
                 {isDragActive ? 'Drop your file here' : 'Drop files here or click to browse'}
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                Supports PDF, DOCX, TXT, and MD files (max 50MB)
+                Supports PDF, DOCX, TXT, and MD files (max 100MB)
               </p>
             </div>
           </div>
