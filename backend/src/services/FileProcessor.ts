@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 
 export interface ProcessedDocument {
   id: string;
@@ -29,8 +30,8 @@ export interface DocumentChunk {
 }
 
 export class FileProcessor {
-  private static readonly CHUNK_SIZE = 1000; // words per chunk
-  private static readonly CHUNK_OVERLAP = 100; // words overlap between chunks
+  private static readonly CHUNK_SIZE_CHARS = 1500; // semantic chunking by characters
+  private static readonly CHUNK_OVERLAP_CHARS = 200;
 
   /**
    * Process uploaded file and extract text content
@@ -65,8 +66,8 @@ export class FileProcessor {
       // Clean and normalize content
       content = this.cleanText(content);
 
-      // Generate chunks
-      const chunks = this.createChunks(fileId, content);
+      // Generate semantic chunks using LangChain splitters (sentence/paragraph aware)
+      const chunks = await this.createSemanticChunks(fileId, content);
 
       // Calculate metadata
       const wordCount = this.countWords(content);
@@ -136,35 +137,32 @@ export class FileProcessor {
   /**
    * Split content into overlapping chunks for better search results
    */
-  private static createChunks(documentId: string, content: string): DocumentChunk[] {
-    const words = content.split(/\s+/);
+  private static async createSemanticChunks(documentId: string, content: string): Promise<DocumentChunk[]> {
+    const splitter = new RecursiveCharacterTextSplitter({
+      chunkSize: this.CHUNK_SIZE_CHARS,
+      chunkOverlap: this.CHUNK_OVERLAP_CHARS,
+    });
+
+    const docs = await splitter.createDocuments([content]);
     const chunks: DocumentChunk[] = [];
-    let chunkIndex = 0;
+    let runningIndex = 0;
 
-    for (let i = 0; i < words.length; i += this.CHUNK_SIZE - this.CHUNK_OVERLAP) {
-      const endIndex = Math.min(i + this.CHUNK_SIZE, words.length);
-      const chunkWords = words.slice(i, endIndex);
-      const chunkContent = chunkWords.join(' ');
-
-      // Calculate positions in original text
-      const startPosition = content.indexOf(chunkWords[0]);
-      const endPosition = startPosition + chunkContent.length;
-
+    docs.forEach((d, idx) => {
+      const text = d.pageContent;
+      const startPosition = content.indexOf(text, runningIndex);
+      const endPosition = startPosition + text.length;
+      runningIndex = Math.max(runningIndex, endPosition);
+      const wordCount = text.split(/\s+/).filter(Boolean).length;
       chunks.push({
-        id: `${documentId}_chunk_${chunkIndex}`,
+        id: `${documentId}_chunk_${idx}`,
         documentId,
-        content: chunkContent,
-        chunkIndex,
+        content: text,
+        chunkIndex: idx,
         startPosition: Math.max(0, startPosition),
         endPosition: Math.min(content.length, endPosition),
-        wordCount: chunkWords.length
+        wordCount
       });
-
-      chunkIndex++;
-
-      // Break if we've reached the end
-      if (endIndex >= words.length) break;
-    }
+    });
 
     return chunks;
   }
@@ -180,7 +178,7 @@ export class FileProcessor {
    * Generate unique file ID
    */
   private static generateFileId(): string {
-    return `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `doc_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
   }
 
   /**

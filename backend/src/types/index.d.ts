@@ -19,3 +19,8 @@ declare module 'pdf-parse' {
     function pdfParse(buffer: Buffer, options?: PDFParseOptions): Promise<PDFData>;
     export = pdfParse;
   }
+
+// Type declarations for optional ESM libraries
+declare module '@xenova/transformers' {
+  export const pipeline: any;
+}

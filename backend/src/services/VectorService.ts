@@ -17,11 +17,16 @@ export interface StoredVector {
 }
 
 export class VectorService {
+  private static rerankPipeline: any | null = null;
+  private static rerankLastUsed: boolean = false;
+  private static rerankModelName: string = 'Xenova/ms-marco-MiniLM-L-6-v2';
   /**
    * Initialize the vector service with MongoDB
    */
   static async initialize(): Promise<void> {
     console.log('✅ Vector service initialized with MongoDB storage');
+    // Lazy init for reranker (downloading models is expensive); prepare hook
+    this.rerankPipeline = null;
   }
 
   /**
@@ -131,6 +136,129 @@ export class VectorService {
       throw new Error(`Failed to search similar chunks: ${error.message}`);
     }
   }
+
+  /**
+   * Hybrid search: combine keyword (BM25-like via Mongo text score) with vector similarity.
+   * We retrieve topN from both, merge by normalized scores, and rerank.
+   */
+  static async searchSimilarHybrid(
+    query: string,
+    options?: { limit?: number; minSimilarity?: number; textTopK?: number; vectorTopK?: number; alpha?: number; rerank?: boolean }
+  ): Promise<RelevantChunk[]> {
+    const limit = options?.limit ?? 5;
+    const minSim = options?.minSimilarity ?? 0.2;
+    const textTopK = options?.textTopK ?? Math.max(20, limit * 4);
+    const vectorTopK = options?.vectorTopK ?? Math.max(20, limit * 4);
+    const alpha = options?.alpha ?? 0.5; // blend weight between vector and text
+    const doRerank = options?.rerank ?? true;
+
+    // 1) Text search results with textScore
+    type TextResult = { chunkId: string; content: string; documentName: string; documentId: string; score?: number };
+    const textResults = (await DocumentChunkModel
+      .find(
+        { $text: { $search: query } },
+        { score: { $meta: 'textScore' }, content: 1, documentName: 1, documentId: 1, chunkId: 1 }
+      )
+      .sort({ score: { $meta: 'textScore' } })
+      .limit(textTopK)
+      .lean()) as TextResult[];
+
+    // Normalize text scores
+    const maxText = textResults.length > 0 ? (textResults[0].score ?? 1) : 1;
+    const textMap = new Map<string, number>();
+    textResults.forEach((r: TextResult) => textMap.set(r.chunkId, ((r.score ?? 0) / (maxText || 1))));
+
+    // 2) Vector results with cosine similarity
+    const vectorResults = await this.searchSimilar(query, vectorTopK, minSim);
+    const maxVec = Math.max(...vectorResults.map(v => v.similarity), 1);
+    const vecMap = new Map<string, number>();
+    vectorResults.forEach(v => vecMap.set(v.chunkId, v.similarity / maxVec));
+
+    // 3) Merge keys
+    const ids = new Set<string>([...textMap.keys(), ...vecMap.keys()]);
+
+    // 4) Gather data for ranking
+    const byId = new Map<string, RelevantChunk>();
+    vectorResults.forEach(v => byId.set(v.chunkId, v));
+    // For text-only hits, reconstruct minimal chunk info from DB rows
+    textResults.forEach((r: TextResult) => {
+      if (!byId.has(r.chunkId)) {
+        byId.set(r.chunkId, {
+          content: r.content,
+          documentName: r.documentName,
+          documentId: r.documentId,
+          chunkId: r.chunkId,
+          similarity: 0
+        });
+      }
+    });
+
+    // 5) Blend scores and rerank
+    const blended = Array.from(ids).map(id => {
+      const textScore = textMap.get(id) || 0;
+      const vecScore = vecMap.get(id) || 0;
+      const score = alpha * vecScore + (1 - alpha) * textScore;
+      return { id, score };
+    });
+
+    blended.sort((a, b) => b.score - a.score);
+    let top = blended.slice(0, Math.max(limit * 2, 10)).map(x => byId.get(x.id)!).filter(Boolean);
+
+    // Optional reranking using cross-encoder if available
+    if (doRerank) {
+      try {
+        const reranked = await this.rerankChunks(query, top);
+        top = reranked.slice(0, limit);
+      } catch (err) {
+        // Silent fallback if model unavailable
+        this.rerankLastUsed = false;
+      }
+    } else {
+      this.rerankLastUsed = false;
+    }
+
+    return top;
+  }
+
+  /**
+   * Cross-encoder reranking using a local transformers pipeline (no external API).
+   * Uses a small MS MARCO model to score (query, chunk) pairs.
+   */
+  private static async rerankChunks(query: string, chunks: RelevantChunk[]): Promise<RelevantChunk[]> {
+    if (chunks.length === 0) return chunks;
+
+    // Lazy initialize the reranker
+    if (!this.rerankPipeline) {
+      // Dynamically import to avoid type issues when not installed
+      try {
+        const { pipeline } = await import('@xenova/transformers');
+        this.rerankPipeline = await pipeline('text-classification', this.rerankModelName);
+      } catch (e) {
+        // Fail silently if model cannot load (e.g., no internet or missing package)
+        this.rerankLastUsed = false;
+        return chunks;
+      }
+    }
+
+    // Score each chunk
+    const scored: Array<{ chunk: RelevantChunk; score: number }> = [];
+    for (const c of chunks) {
+      try {
+        const output = await this.rerankPipeline(`${query} [SEP] ${c.content.substring(0, 512)}`);
+        const score = Array.isArray(output) ? (output[0]?.score ?? 0) : (output?.score ?? 0);
+        scored.push({ chunk: c, score });
+      } catch {
+        scored.push({ chunk: c, score: 0 });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    this.rerankLastUsed = true;
+    return scored.map(s => s.chunk);
+  }
+
+  static getLastRerankUsed(): boolean { return this.rerankLastUsed; }
+  static getRerankModelName(): string { return this.rerankModelName; }
 
   /**
    * Get all documents with their chunk counts

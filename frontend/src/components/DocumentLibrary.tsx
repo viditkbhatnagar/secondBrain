@@ -41,10 +41,18 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     });
   };
 
-  const formatFileSize = (wordCount: number) => {
+  const formatWordCount = (wordCount: number) => {
     if (wordCount < 1000) return `${wordCount} words`;
     if (wordCount < 1000000) return `${(wordCount / 1000).toFixed(1)}K words`;
     return `${(wordCount / 1000000).toFixed(1)}M words`;
+  };
+
+  const formatBytes = (bytes?: number) => {
+    if (!bytes && bytes !== 0) return '—';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   };
 
   const getFileIcon = (filename: string) => {
@@ -151,7 +159,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         </div>
                         <div className="flex items-center">
                           <Hash className="h-3 w-3 mr-1" />
-                          {formatFileSize(document.wordCount)}
+                          {formatWordCount(document.wordCount)}
                         </div>
                         <div className="flex items-center">
                           <Tag className="h-3 w-3 mr-1" />
@@ -211,8 +219,12 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
+                        <span className="font-medium text-gray-900">Word Count:</span>
+                        <div className="text-gray-600">{formatWordCount(document.wordCount)}</div>
+                      </div>
+                      <div>
                         <span className="font-medium text-gray-900">File Size:</span>
-                        <div className="text-gray-600">{formatFileSize(document.wordCount)}</div>
+                        <div className="text-gray-600">{formatBytes((document as any).fileSize)}</div>
                       </div>
                       <div>
                         <span className="font-medium text-gray-900">Chunks:</span>

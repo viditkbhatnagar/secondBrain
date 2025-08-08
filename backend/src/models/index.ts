@@ -25,6 +25,7 @@ export interface IDocumentChunk extends Document {
   id: string;
   documentId: string;
   documentName: string;
+  chunkId: string;
   content: string;
   chunkIndex: number;
   startPosition: number;
@@ -53,6 +54,27 @@ export interface ISearchQuery extends Document {
   confidence: number;
   responseTime: number;
   timestamp: Date;
+}
+
+// Chat thread and message models
+export interface IChatThread extends Document {
+  threadId: string;
+  title?: string;
+  strategy: 'hybrid' | 'vector';
+  rerank: boolean;
+  messageCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  lastMessageAt?: Date;
+}
+
+export interface IChatMessage extends Document {
+  threadId: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  metadata?: any;
+  agentTrace?: any[];
+  createdAt: Date;
 }
 
 // Document schema
@@ -95,6 +117,7 @@ const DocumentChunkSchema = new Schema<IDocumentChunk>({
   id: { type: String, required: true, unique: true, index: true },
   documentId: { type: String, required: true, index: true },
   documentName: { type: String, required: true, index: true },
+  chunkId: { type: String, required: true, unique: true, index: true },
   content: { type: String, required: true },
   chunkIndex: { type: Number, required: true },
   startPosition: { type: Number, required: true },
@@ -104,9 +127,10 @@ const DocumentChunkSchema = new Schema<IDocumentChunk>({
   createdAt: { type: Date, default: Date.now, index: true }
 });
 
-// Create vector search index (for MongoDB Atlas)
-// This will be created programmatically when using Atlas Vector Search
-DocumentChunkSchema.index({ embedding: '2dsphere' });
+// Enable text search over chunk content for hybrid retrieval
+DocumentChunkSchema.index({ content: 'text' });
+
+// Note: If using MongoDB Atlas Vector Search, configure the vector index in Atlas UI or via admin scripts.
 
 // User session schema
 const UserSessionSchema = new Schema<IUserSession>({
@@ -134,6 +158,30 @@ export const DocumentModel = mongoose.model<IDocument>('Document', DocumentSchem
 export const DocumentChunkModel = mongoose.model<IDocumentChunk>('DocumentChunk', DocumentChunkSchema);
 export const UserSessionModel = mongoose.model<IUserSession>('UserSession', UserSessionSchema);
 export const SearchQueryModel = mongoose.model<ISearchQuery>('SearchQuery', SearchQuerySchema);
+
+// Chat schemas
+const ChatThreadSchema = new Schema<IChatThread>({
+  threadId: { type: String, required: true, unique: true, index: true },
+  title: { type: String },
+  strategy: { type: String, enum: ['hybrid', 'vector'], default: 'hybrid', index: true },
+  rerank: { type: Boolean, default: true },
+  messageCount: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+  lastMessageAt: { type: Date, index: true }
+});
+
+const ChatMessageSchema = new Schema<IChatMessage>({
+  threadId: { type: String, required: true, index: true },
+  role: { type: String, enum: ['user', 'assistant', 'system'], required: true },
+  content: { type: String, required: true },
+  metadata: { type: Schema.Types.Mixed },
+  agentTrace: { type: Array },
+  createdAt: { type: Date, default: Date.now, index: true }
+});
+
+export const ChatThreadModel = mongoose.model<IChatThread>('ChatThread', ChatThreadSchema);
+export const ChatMessageModel = mongoose.model<IChatMessage>('ChatMessage', ChatMessageSchema);
 
 // Helper function to connect to MongoDB
 export const connectDB = async (): Promise<void> => {

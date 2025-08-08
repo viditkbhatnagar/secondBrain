@@ -2,17 +2,19 @@ import React, { useState } from 'react';
 import { Search, Sparkles } from 'lucide-react';
 
 interface SearchInterfaceProps {
-  onSearch: (query: string) => void;
+  onSearch: (query: string, strategy?: 'vector' | 'hybrid', rerank?: boolean) => void;
   isSearching: boolean;
 }
 
 export const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch, isSearching }) => {
   const [query, setQuery] = useState('');
+  const [strategy, setStrategy] = useState<'vector' | 'hybrid'>('hybrid');
+  const [rerank, setRerank] = useState<boolean>(true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim() && !isSearching) {
-      onSearch(query.trim());
+      onSearch(query.trim(), strategy, rerank);
     }
   };
 
@@ -57,7 +59,25 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({ onSearch, isSe
               disabled={isSearching}
               className="block w-full pl-10 pr-12 py-4 text-lg border border-gray-300 rounded-lg shadow-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
-            <div className="absolute inset-y-0 right-0 flex items-center">
+            <div className="absolute inset-y-0 right-0 flex items-center space-x-2">
+              <select
+                value={strategy}
+                onChange={(e) => setStrategy(e.target.value as 'vector' | 'hybrid')}
+                className="mr-2 text-xs border border-gray-300 rounded-md px-2 py-1 text-gray-700 bg-white"
+                title="Retrieval Strategy"
+              >
+                <option value="hybrid">Hybrid</option>
+                <option value="vector">Vector</option>
+              </select>
+              <label className="flex items-center text-xs text-gray-600 mr-2">
+                <input
+                  type="checkbox"
+                  className="mr-1"
+                  checked={rerank}
+                  onChange={(e) => setRerank(e.target.checked)}
+                />
+                Rerank
+              </label>
               <button
                 type="submit"
                 disabled={!query.trim() || isSearching}

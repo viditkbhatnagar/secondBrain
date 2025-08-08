@@ -2,8 +2,8 @@
 const getApiBaseUrl = (): string => {
     // Check if we're in production
     if (process.env.NODE_ENV === 'production') {
-      // Replace this with your actual Render backend URL after deployment
-      return process.env.REACT_APP_API_URL || 'https://your-backend-name.onrender.com/api';
+      // Use env if provided; otherwise default to Render backend URL
+      return process.env.REACT_APP_API_URL || 'https://knowledge-base-backend-ynyk.onrender.com/api';
     }
     
     // Development environment
@@ -16,9 +16,11 @@ const getApiBaseUrl = (): string => {
   export const API_ENDPOINTS = {
     upload: `${API_BASE_URL}/upload`,
     search: `${API_BASE_URL}/search`,
+    searchRecent: `${API_BASE_URL}/search/recent`,
     documents: `${API_BASE_URL}/documents`,
     documentsStats: `${API_BASE_URL}/documents/stats`,
-    health: `${API_BASE_URL}/health`
+    health: `${API_BASE_URL}/health`,
+    baseChat: `${API_BASE_URL}/chat`
   };
   
   // Helper function for making API requests with error handling

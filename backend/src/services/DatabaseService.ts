@@ -1,4 +1,4 @@
-import { DocumentModel, DocumentChunkModel, UserSessionModel, SearchQueryModel, connectDB, getDBStats, IDocument } from '../models/index';
+import { DocumentModel, DocumentChunkModel, UserSessionModel, SearchQueryModel, connectDB, getDBStats, IDocument, ChatThreadModel, ChatMessageModel } from '../models/index';
 
 export interface DocumentRecord {
   id: string;
@@ -220,17 +220,14 @@ export class DatabaseService {
    */
   static async deleteDocument(id: string): Promise<boolean> {
     try {
-      // Delete the document
+      // Delete the document record only (vectors/chunks handled by VectorService)
       const deleteResult = await DocumentModel.deleteOne({ id }).exec();
-      
+
       if (deleteResult.deletedCount === 0) {
         return false; // Document not found
       }
 
-      // Delete associated chunks
-      const chunkDeleteResult = await DocumentChunkModel.deleteMany({ documentId: id }).exec();
-      
-      console.log(`✅ Deleted document ${id} and ${chunkDeleteResult.deletedCount} associated chunks`);
+      console.log(`✅ Deleted document ${id}`);
       return true;
     } catch (error) {
       console.error('Error deleting document:', error);
@@ -344,6 +341,60 @@ export class DatabaseService {
       // Don't throw error for logging failures, just log it
       console.warn('Failed to log search query:', error);
     }
+  }
+
+  /**
+   * Get recent search queries
+   */
+  static async getRecentSearches(limit: number = 10): Promise<Array<{ query: string; timestamp: Date; resultsCount: number; confidence: number; responseTime: number }>> {
+    try {
+      const recent = await SearchQueryModel
+        .find({}, { _id: 0, query: 1, timestamp: 1, resultsCount: 1, confidence: 1, responseTime: 1 })
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .exec();
+
+      return recent as Array<{ query: string; timestamp: Date; resultsCount: number; confidence: number; responseTime: number }>;
+    } catch (error) {
+      console.error('Error getting recent searches:', error);
+      return [];
+    }
+  }
+
+  // Chat thread helpers
+  static async createThread(strategy: 'hybrid' | 'vector', rerank: boolean): Promise<{ threadId: string }> {
+    const threadId = `thread_${Date.now()}_${Math.random().toString(36).slice(2,9)}`;
+    const thread = new ChatThreadModel({ threadId, strategy, rerank, messageCount: 0 });
+    await thread.save();
+    return { threadId };
+  }
+
+  static async listThreads(limit: number = 20) {
+    return ChatThreadModel.find({}).sort({ updatedAt: -1 }).limit(limit).lean();
+  }
+
+  static async addMessage(threadId: string, role: 'user' | 'assistant' | 'system', content: string, metadata?: any, agentTrace?: any[]) {
+    const msg = new ChatMessageModel({ threadId, role, content, metadata, agentTrace });
+    await msg.save();
+    await ChatThreadModel.findOneAndUpdate(
+      { threadId },
+      { $inc: { messageCount: 1 }, $set: { updatedAt: new Date(), lastMessageAt: new Date() } },
+      { upsert: false }
+    );
+    return msg;
+  }
+
+  static async getMessages(threadId: string, limit: number = 100) {
+    return ChatMessageModel.find({ threadId }).sort({ createdAt: 1 }).limit(limit).lean();
+  }
+
+  static async updateThreadTitle(threadId: string, title: string): Promise<void> {
+    await ChatThreadModel.findOneAndUpdate({ threadId }, { $set: { title, updatedAt: new Date() } }).exec();
+  }
+
+  static async deleteThread(threadId: string): Promise<void> {
+    await ChatMessageModel.deleteMany({ threadId }).exec();
+    await ChatThreadModel.deleteOne({ threadId }).exec();
   }
 
   /**

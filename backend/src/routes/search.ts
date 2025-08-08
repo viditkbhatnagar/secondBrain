@@ -2,12 +2,14 @@ import express from 'express';
 import { VectorService } from '../services/VectorService';
 import { ClaudeService } from '../services/ClaudeService';
 import { DatabaseService } from '../services/DatabaseService';
+import { AgentService } from '../services/AgentService';
+import { Request, Response } from 'express';
 
 export const searchRouter = express.Router();
 
 searchRouter.post('/', async (req, res) => {
   try {
-    const { query } = req.body;
+    const { query, strategy, rerank } = req.body;
 
     if (!query || typeof query !== 'string') {
       return res.status(400).json({ 
@@ -45,8 +47,10 @@ searchRouter.post('/', async (req, res) => {
       });
     }
 
-    // Find relevant document chunks
-    const relevantChunks = await VectorService.searchSimilar(query, 5, 0.3);
+    // Find relevant document chunks based on strategy
+    const relevantChunks = strategy === 'hybrid'
+      ? await VectorService.searchSimilarHybrid(query, { limit: 5, minSimilarity: 0.2, alpha: 0.6, rerank: rerank !== false })
+      : await VectorService.searchSimilar(query, 5, 0.3);
 
     if (relevantChunks.length === 0) {
       return res.json({
@@ -72,7 +76,14 @@ searchRouter.post('/', async (req, res) => {
 
     console.log(`Generated answer with ${searchResult.confidence}% confidence`);
 
-    res.json(searchResult);
+    res.json({
+      ...searchResult,
+      metadata: {
+        strategy: strategy === 'hybrid' ? 'hybrid' : 'vector',
+        rerankUsed: VectorService.getLastRerankUsed(),
+        rerankModel: VectorService.getRerankModelName()
+      }
+    });
 
   } catch (error: any) {
     console.error('Search error:', error);
@@ -159,6 +170,17 @@ searchRouter.post('/', async (req, res) => {
   }
 });
 
+// Get recent searches (last 10)
+searchRouter.get('/recent', async (_req, res) => {
+  try {
+    const recent = await DatabaseService.getRecentSearches(10);
+    res.json({ recent });
+  } catch (error) {
+    console.error('Recent searches error:', error);
+    res.status(500).json({ error: 'Failed to fetch recent searches' });
+  }
+});
+
 // Alternative search endpoint for finding similar documents
 searchRouter.post('/documents', async (req, res) => {
   try {
@@ -208,5 +230,95 @@ searchRouter.post('/documents', async (req, res) => {
     }
 
     res.status(500).json(errorResponse);
+  }
+});
+
+// Agentic chat-style endpoint (phase 2 minimal non-streaming)
+// SSE streaming agent endpoint
+searchRouter.get('/agent/stream', async (req: Request, res: Response) => {
+  try {
+    const query = String(req.query.query || '');
+    const strategy = (req.query.strategy as string) === 'vector' ? 'vector' : 'hybrid';
+    const rerank = req.query.rerank !== 'false';
+    const threadId = String(req.query.threadId || '');
+
+    if (!query) {
+      res.status(400).end();
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const send = (event: string, data: any) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    // Step 1: optionally create thread
+    let tid = threadId || (await DatabaseService.createThread(strategy as any, rerank)).threadId;
+    send('thread', { threadId: tid });
+
+    // Step 2: log user message
+    await DatabaseService.addMessage(tid, 'user', query);
+    send('step', { label: 'User message stored' });
+
+    // Step 3: clarify
+    const clarifying = await AgentService.maybeClarify(query);
+    if (clarifying) send('clarify', { question: clarifying });
+
+    // Step 4: retrieve
+    const effectiveQuery = clarifying ? `${query}\nClarification: ${clarifying}` : query;
+    const { chunks, trace } = await AgentService.retrieve(effectiveQuery, strategy as any, rerank);
+    send('retrieval', { strategy, rerank, count: chunks.length });
+
+    // Step 5: answer (simulate token streaming by chunking the answer)
+    const result = await AgentService.answer(query, chunks);
+    const answer = result.answer || '';
+    const tokenSize = 80;
+    for (let i = 0; i < answer.length; i += tokenSize) {
+      const slice = answer.slice(i, i + tokenSize);
+      send('answer', { partial: slice });
+      await new Promise(r => setTimeout(r, 20));
+    }
+
+    // Step 6: finalize and persist
+    await DatabaseService.logSearchQuery(query, chunks.length, result.confidence, 0);
+    await DatabaseService.addMessage(tid, 'assistant', result.answer, { metadata: { strategy, rerank } }, trace);
+    send('done', { metadata: { strategy, rerank }, agentTrace: trace });
+    res.end();
+  } catch (error) {
+    try { res.write(`event: error\n` + `data: ${JSON.stringify({ message: (error as any).message })}\n\n`); } catch {}
+    res.end();
+  }
+});
+
+searchRouter.post('/agent', async (req, res) => {
+  try {
+    const { query, strategy = 'hybrid', rerank = true, threadId } = req.body;
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ error: 'Invalid Query', message: 'Please provide a valid search question.', code: 'INVALID_QUERY' });
+    }
+
+    const start = Date.now();
+    let tid = threadId as string | undefined;
+    if (!tid) {
+      const t = await DatabaseService.createThread(strategy, rerank);
+      tid = t.threadId;
+    }
+    await DatabaseService.addMessage(tid, 'user', query);
+
+    const result = await AgentService.processQuestion(query, strategy, rerank);
+    const responseTime = Date.now() - start;
+
+    await DatabaseService.logSearchQuery(query, result.relevantChunks.length, result.confidence, responseTime);
+    await DatabaseService.addMessage(tid, 'assistant', result.answer, { metadata: result.metadata }, result.agentTrace);
+
+    res.json({ threadId: tid, ...result });
+  } catch (error: any) {
+    console.error('Agent error:', error);
+    res.status(500).json({ error: 'Agent Failed', message: error.message || 'Unknown error', code: 'AGENT_ERROR' });
   }
 });

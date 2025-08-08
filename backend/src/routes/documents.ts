@@ -18,6 +18,45 @@ documentsRouter.get('/', async (req, res) => {
   }
 });
 
+// Get document chunks by document ID
+documentsRouter.get('/:id/chunks', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const chunks = await VectorService.getDocumentChunks(id);
+    res.json({ chunks });
+  } catch (error) {
+    console.error('Error fetching document chunks:', error);
+    res.status(500).json({
+      error: 'Failed to fetch document chunks',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get statistics (must be before parameterized routes)
+documentsRouter.get('/stats', async (req, res) => {
+  try {
+    const stats = await DatabaseService.getStats();
+    const vectorCount = await VectorService.getVectorCount();
+    
+    res.json({
+      totalDocuments: stats.totalDocuments,
+      totalChunks: vectorCount,
+      totalWords: stats.totalWords,
+      totalSizeMB: stats.totalSizeMB,
+      averageWordsPerDocument: stats.averageWordsPerDocument,
+      recentUploads: stats.recentUploads,
+      topTopics: stats.topTopics
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({
+      error: 'Failed to fetch statistics',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Get document by ID
 documentsRouter.get('/:id', async (req, res) => {
   try {
@@ -49,10 +88,10 @@ documentsRouter.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Document not found' });
     }
     
-    // Delete from vector store
-    const deletedVectorCount = VectorService.deleteDocument(id);
-    
-    // Delete from database
+    // Delete vectors first to get accurate count
+    const deletedVectorCount = await VectorService.deleteDocument(id);
+
+    // Delete from database (document record only)
     await DatabaseService.deleteDocument(id);
     
     console.log(`Deleted document ${id} and ${deletedVectorCount} associated vectors`);
@@ -66,30 +105,6 @@ documentsRouter.delete('/:id', async (req, res) => {
     console.error('Error deleting document:', error);
     res.status(500).json({
       error: 'Failed to delete document',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// Get statistics
-documentsRouter.get('/stats', async (req, res) => {
-  try {
-    const stats = await DatabaseService.getStats();
-    const vectorCount = await VectorService.getVectorCount();
-    
-    res.json({
-      totalDocuments: stats.totalDocuments,
-      totalChunks: vectorCount,
-      totalWords: stats.totalWords,
-      totalSizeMB: stats.totalSizeMB,
-      averageWordsPerDocument: stats.averageWordsPerDocument,
-      recentUploads: stats.recentUploads,
-      topTopics: stats.topTopics
-    });
-  } catch (error) {
-    console.error('Error fetching stats:', error);
-    res.status(500).json({
-      error: 'Failed to fetch statistics',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

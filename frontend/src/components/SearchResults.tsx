@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, AlertCircle, FileText, Target } from 'lucide-react';
+import { CheckCircle, AlertCircle, FileText, Target, Clipboard } from 'lucide-react';
 import { SearchResult } from '../App';
 
 interface SearchResultsProps {
@@ -7,6 +7,11 @@ interface SearchResultsProps {
 }
 
 export const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
+
+  const isExpanded = (id: string) => !!expanded[id];
+  const toggleExpanded = (id: string) =>
+    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 80) return 'text-green-600 bg-green-100';
     if (confidence >= 60) return 'text-yellow-600 bg-yellow-100';
@@ -56,6 +61,19 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
             </div>
           )}
         </div>
+        {results.metadata && (
+          <div className="mb-3 text-xs text-gray-500">
+            Strategy: <span className="font-medium">{results.metadata.strategy || 'vector'}</span>
+            {typeof results.metadata.rerankUsed !== 'undefined' && (
+              <>
+                {', '}Rerank: <span className="font-medium">{results.metadata.rerankUsed ? 'on' : 'off'}</span>
+              </>
+            )}
+            {results.metadata.rerankUsed && results.metadata.rerankModel && (
+              <span>{' '}({results.metadata.rerankModel})</span>
+            )}
+          </div>
+        )}
         
         <div className="prose prose-gray max-w-none">
           <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
@@ -92,7 +110,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
             </h3>
           </div>
           
-          <div className="space-y-4">
+              <div className="space-y-4">
             {results.relevantChunks.map((chunk, index) => (
               <div
                 key={chunk.chunkId}
@@ -105,7 +123,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
                       {chunk.documentName}
                     </span>
                   </div>
-                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2">
                     <span className="text-xs text-gray-500">
                       Relevance: {formatSimilarity(chunk.similarity)}
                     </span>
@@ -115,19 +133,28 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
                         style={{ width: `${chunk.similarity * 100}%` }}
                       ></div>
                     </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(chunk.content)}
+                        className="ml-2 inline-flex items-center text-xs text-gray-600 hover:text-gray-900"
+                        title="Copy this source chunk"
+                      >
+                        <Clipboard className="h-3 w-3 mr-1" /> Copy
+                      </button>
                   </div>
                 </div>
                 
-                <div className="text-sm text-gray-700 leading-relaxed">
-                  {chunk.content.length > 300 
-                    ? `${chunk.content.substring(0, 300)}...` 
-                    : chunk.content
-                  }
+                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  {chunk.content.length > 300 && !isExpanded(chunk.chunkId)
+                    ? `${chunk.content.substring(0, 300)}...`
+                    : chunk.content}
                 </div>
-                
+
                 {chunk.content.length > 300 && (
-                  <button className="mt-2 text-xs text-blue-600 hover:text-blue-800">
-                    Show more
+                  <button
+                    onClick={() => toggleExpanded(chunk.chunkId)}
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    {isExpanded(chunk.chunkId) ? 'Show less' : 'Show more'}
                   </button>
                 )}
               </div>

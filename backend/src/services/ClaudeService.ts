@@ -252,6 +252,36 @@ Provide a clear, informative summary in 2-3 sentences.`;
   }
 
   /**
+   * Generate a concise clarifying question to improve retrieval
+   */
+  static async generateClarifyingQuestion(question: string, contextHint?: string): Promise<string> {
+    if (!this.anthropic) {
+      throw new Error('Claude service not initialized. Please check your ANTHROPIC_API_KEY.');
+    }
+
+    const prompt = `Your task is to craft one short clarifying question that would help retrieve more relevant passages to answer the user's question with high confidence.
+
+User question: "${question}"
+${contextHint ? `Context hint: ${contextHint}\n` : ''}
+
+Return only the clarifying question.`;
+
+    try {
+      const response = await this.anthropic.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 80,
+        temperature: 0.3,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const text = response.content[0].type === 'text' ? response.content[0].text : '';
+      return text.trim();
+    } catch (error: any) {
+      throw new Error(`Claude clarifying question generation failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Extract key topics and tags from document content
    */
   static async extractTopics(content: string): Promise<string[]> {

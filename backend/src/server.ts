@@ -4,9 +4,11 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs-extra';
+import mongoose from 'mongoose';
 import { fileUploadRouter } from './routes/fileUpload';
 import { searchRouter } from './routes/search';
 import { documentsRouter } from './routes/documents';
+import { chatRouter } from './routes/chat';
 import { DatabaseService } from './services/DatabaseService';
 import { VectorService } from './services/VectorService';
 import { ClaudeService } from './services/ClaudeService';
@@ -17,10 +19,13 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware with increased limits for large files
+// Configure CORS with env overrides for production
+const prodOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : (process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : ['https://knowledge-base-frontend-xxx.onrender.com']);
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://knowledge-base-frontend-xxx.onrender.com'] // Replace with your frontend URL
-    : ['http://localhost:3000'],
+  origin: process.env.NODE_ENV === 'production' ? prodOrigins : ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true
 }));
 app.use(express.json({ limit: '100mb' })); // Increased from 50mb
@@ -74,18 +79,20 @@ const upload = multer({
 app.use('/api/upload', upload.single('file'), fileUploadRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/documents', documentsRouter);
+app.use('/api/chat', chatRouter);
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
   try {
-    // Basic health check
+    // Basic health check with DB state
+    const mongodbState = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
     const health = {
       status: 'OK',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      mongodb: 'connected'
+      mongodb: mongodbState
     };
-    
+
     res.json(health);
   } catch (error) {
     res.status(503).json({
@@ -117,7 +124,7 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
   if (error.code === 'LIMIT_FILE_SIZE') {
     errorResponse = {
       error: 'File too large',
-      message: 'File size must be less than 50MB'
+      message: 'File size must be less than 100MB'
     };
     return res.status(413).json(errorResponse);
   }

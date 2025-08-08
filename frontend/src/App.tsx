@@ -3,9 +3,12 @@ import { FileUpload } from './components/FileUpload';
 import { SearchInterface } from './components/SearchInterface';
 import { DocumentLibrary } from './components/DocumentLibrary';
 import { SearchResults } from './components/SearchResults';
-import { Brain, Search, Library, Upload } from 'lucide-react';
+import { Brain, Search, Library, Upload, Menu, MessageSquare } from 'lucide-react';
 import { API_ENDPOINTS } from './config/api';
 import './App.css';
+import RightSidebar from './components/RightSidebar';
+import Chat from './components/Chat';
+import HashListener from './components/HashListener';
 
 export interface Document {
   id: string;
@@ -16,6 +19,7 @@ export interface Document {
   chunkCount: number;
   summary?: string;
   topics?: string[];
+  fileSize?: number;
 }
 
 export interface SearchResult {
@@ -30,9 +34,14 @@ export interface SearchResult {
   confidence: number;
   sources: string[];
   isError?: boolean;
+  metadata?: {
+    strategy?: 'hybrid' | 'vector';
+    rerankUsed?: boolean;
+    rerankModel?: string;
+  };
 }
 
-type ActiveTab = 'upload' | 'search' | 'library';
+type ActiveTab = 'upload' | 'search' | 'library' | 'chat';
 
 function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('upload');
@@ -40,11 +49,14 @@ function App() {
   const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [stats, setStats] = useState({ totalDocuments: 0, totalChunks: 0 });
+  const [recentSearches, setRecentSearches] = useState<Array<{ query: string; timestamp: string }>>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Load documents and stats on component mount
   useEffect(() => {
     loadDocuments();
     loadStats();
+    loadRecentSearches();
   }, []);
 
   const loadDocuments = async () => {
@@ -71,6 +83,22 @@ function App() {
     }
   };
 
+  const loadRecentSearches = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.searchRecent);
+      if (response.ok) {
+        const data = await response.json();
+        const recent = (data.recent || []).map((item: any) => ({
+          query: item.query,
+          timestamp: item.timestamp,
+        }));
+        setRecentSearches(recent);
+      }
+    } catch (error) {
+      console.error('Error loading recent searches:', error);
+    }
+  };
+
   const handleFileUploaded = (newDocument: Document) => {
     setDocuments(prev => [newDocument, ...prev]);
     setStats(prev => ({
@@ -82,7 +110,7 @@ function App() {
     setActiveTab('library');
   };
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = async (query: string, strategy: 'vector' | 'hybrid' = 'hybrid', rerank: boolean = true) => {
     setIsSearching(true);
     setSearchResults(null);
     
@@ -92,13 +120,15 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, strategy, rerank }),
       });
       
       const results = await response.json();
       
       if (response.ok) {
         setSearchResults(results);
+        // Refresh recent searches after a successful search
+        loadRecentSearches();
       } else {
         // Handle specific error responses from backend
         const errorMessage = results.message || results.error || 'Search failed';
@@ -179,6 +209,13 @@ function App() {
             <div className="flex items-center space-x-6 text-sm text-gray-600">
               <span>{stats.totalDocuments} documents</span>
               <span>{stats.totalChunks} chunks</span>
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2 rounded hover:bg-gray-100"
+                title="Open guide"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
             </div>
           </div>
         </div>
@@ -211,6 +248,17 @@ function App() {
               <Search className="h-4 w-4" />
               <span>Search</span>
             </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'chat'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span>Chat</span>
+            </button>
             
             <button
               onClick={() => setActiveTab('library')}
@@ -229,6 +277,8 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Hash anchor listener for deep-linking from AgentTrace */}
+        <HashListener />
         {activeTab === 'upload' && (
           <div className="max-w-2xl mx-auto">
             <FileUpload onFileUploaded={handleFileUploaded} />
@@ -243,6 +293,24 @@ function App() {
                 isSearching={isSearching} 
               />
             </div>
+
+            {/* Recent Searches */}
+            {recentSearches.length > 0 && (
+              <div className="max-w-2xl mx-auto bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-2">Recent Searches</h3>
+                <div className="flex flex-wrap gap-2">
+                  {recentSearches.map((s, idx) => (
+                    <button
+                      key={`${s.query}-${idx}`}
+                      onClick={() => handleSearch(s.query)}
+                      className="px-2 py-1 text-xs rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200"
+                    >
+                      {s.query}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             
             {searchResults && (
               <SearchResults results={searchResults} />
@@ -263,7 +331,13 @@ function App() {
             onDeleteDocument={handleDeleteDocument}
           />
         )}
+
+        {activeTab === 'chat' && (
+          <Chat />
+        )}
       </main>
+
+      <RightSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
     </div>
   );
 }
