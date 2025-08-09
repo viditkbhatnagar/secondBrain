@@ -3,6 +3,10 @@ import path from 'path';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
+import { ClassificationService } from './ClassificationService';
+import { exec as execCb } from 'node:child_process';
+import { promisify } from 'node:util';
+const exec = promisify(execCb);
 
 export interface ProcessedDocument {
   id: string;
@@ -48,6 +52,11 @@ export class FileProcessor {
           const pdfResult = await this.extractFromPDF(filePath);
           content = pdfResult.content;
           pageCount = pdfResult.pageCount;
+          // OCR fallback for scanned PDFs
+          if (!content.trim()) {
+            const ocrText = await this.ocrPdf(filePath, pageCount || 0);
+            content = ocrText;
+          }
           break;
         
         case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
@@ -57,6 +66,13 @@ export class FileProcessor {
         case 'text/plain':
         case 'text/markdown':
           content = await this.extractFromText(filePath);
+          break;
+        case 'application/json':
+          content = await this.extractFromJson(filePath);
+          break;
+        case 'image/png':
+        case 'image/jpeg':
+          content = await this.extractFromImage(filePath);
           break;
         
         default:
@@ -121,6 +137,68 @@ export class FileProcessor {
    */
   private static async extractFromText(filePath: string): Promise<string> {
     return await fs.readFile(filePath, 'utf-8');
+  }
+
+  private static async extractFromImage(filePath: string): Promise<string> {
+    try {
+      await exec(`tesseract "${filePath}" "${filePath}" -l eng`);
+      const txtPath = `${filePath}.txt`;
+      return await fs.readFile(txtPath, 'utf-8');
+    } catch (e) {
+      console.warn('OCR unavailable, returning empty text');
+      return '';
+    }
+  }
+
+  private static async extractFromJson(filePath: string): Promise<string> {
+    try {
+      const raw = await fs.readFile(filePath, 'utf-8');
+      const obj = JSON.parse(raw);
+      // Flatten JSON into a readable text for embeddings
+      const flatten = (o: any, prefix = ''): string[] => {
+        if (o === null || o === undefined) return [];
+        if (typeof o !== 'object') return [`${prefix}${String(o)}`];
+        const parts: string[] = [];
+        for (const [k, v] of Object.entries(o)) {
+          const key = prefix ? `${prefix}.${k}: ` : `${k}: `;
+          parts.push(...flatten(v, key));
+        }
+        return parts;
+      };
+      return flatten(obj).join('\n');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * OCR entire PDF by converting pages to PNG images (requires pdftoppm) and running tesseract.
+   */
+  private static async ocrPdf(filePath: string, pageCount: number): Promise<string> {
+    try {
+      const prefix = `${filePath}_ocr`;
+      await exec(`pdftoppm -png "${filePath}" "${prefix}"`);
+      let full = '';
+      // Attempt up to pageCount pages; if pageCount unknown, try first 20 pattern
+      const maxPages = pageCount && pageCount > 0 ? pageCount : 20;
+      for (let i = 1; i <= maxPages; i++) {
+        const imgPath = `${prefix}-${i}.png`;
+        if (!(await fs.pathExists(imgPath))) {
+          if (i === 1) break; // no pages rendered
+          else continue;
+        }
+        const text = await this.extractFromImage(imgPath);
+        full += `\n\n[Page ${i}]\n${text}`;
+        // Cleanup txt side-file if created
+        const txtPath = `${imgPath}.txt`;
+        if (await fs.pathExists(txtPath)) await fs.remove(txtPath);
+        await fs.remove(imgPath);
+      }
+      return full.trim();
+    } catch (e) {
+      console.warn('PDF OCR failed (pdftoppm not available?)');
+      return '';
+    }
   }
 
   /**

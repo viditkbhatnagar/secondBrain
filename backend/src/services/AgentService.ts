@@ -1,6 +1,7 @@
 import { VectorService } from './VectorService';
 import { DatabaseService } from './DatabaseService';
 import { ClaudeService, RelevantChunk, SearchResult } from './ClaudeService';
+import { GraphService } from './GraphService';
 
 type RetrievalStrategy = 'hybrid' | 'vector';
 
@@ -42,6 +43,34 @@ export class AgentService {
       chunks = await VectorService.searchSimilar(question, 5, 0.3);
       trace.push({ step: 'retrieval', detail: { strategy: 'vector' } });
     }
+
+    // Graph RAG: if we can ground entities, narrow to docIds within 2-hop neighborhood
+    try {
+      const entityRegex = /(PERSON|ORG|ID_NUMBER|EMAIL|PHONE):([^\s]+)/ig;
+      const matches = Array.from(question.matchAll(entityRegex));
+      if (matches.length > 0) {
+        const firstLabel = `${matches[0][1]}:${matches[0][2]}`;
+        const nodeId = firstLabel.toUpperCase();
+        const graph = await GraphService.neighborhood(nodeId, 2);
+        const docNodeIds = new Set<string>();
+        for (const edge of graph.edges as any[]) {
+          if (edge.type === 'MENTIONS') {
+            const fromIsDoc = (graph.nodes as any[]).find(n => n.id === edge.from)?.type === 'DOCUMENT';
+            const toIsDoc = (graph.nodes as any[]).find(n => n.id === edge.to)?.type === 'DOCUMENT';
+            if (fromIsDoc) docNodeIds.add(edge.from);
+            if (toIsDoc) docNodeIds.add(edge.to);
+          }
+        }
+        const docIds = Array.from(docNodeIds).map(id => id.replace(/^document:/, ''));
+        if (docIds.length > 0) {
+          const narrowed = await VectorService.searchSimilarWithin(question, docIds, 5, 0.2);
+          if (narrowed.length > 0) {
+            chunks = narrowed;
+            trace.push({ step: 'graph-rag', detail: { groundedEntity: firstLabel, docIds: docIds.slice(0, 20), count: narrowed.length } });
+          }
+        }
+      }
+    } catch {}
 
     return { chunks, trace };
   }

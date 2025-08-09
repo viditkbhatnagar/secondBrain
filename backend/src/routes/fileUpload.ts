@@ -3,6 +3,8 @@ import { FileProcessor } from '../services/FileProcessor';
 import { VectorService } from '../services/VectorService';
 import { DatabaseService } from '../services/DatabaseService';
 import { ClaudeService } from '../services/ClaudeService';
+import { ClassificationService } from '../services/ClassificationService';
+import { NerService } from '../services/NerService';
 
 export const fileUploadRouter = express.Router();
 
@@ -28,7 +30,10 @@ fileUploadRouter.post('/', async (req, res) => {
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/plain',
-      'text/markdown'
+      'text/markdown',
+      'image/png',
+      'image/jpeg',
+      'application/json'
     ];
 
     if (!allowedTypes.includes(mimetype)) {
@@ -69,6 +74,18 @@ fileUploadRouter.post('/', async (req, res) => {
     // Extract topics using Claude
     const topics = await ClaudeService.extractTopics(processedDocument.content);
 
+    // Classify document (first ~3-4 pages) using heuristic+LLM
+    const classification = await ClassificationService.classifyDocument(
+      processedDocument.content,
+      processedDocument.originalName
+    );
+
+    // Extract entities (quick + LLM)
+    const quickEntities = NerService.extractQuick(processedDocument.content);
+    const llmEntities = await NerService.extractLLM(processedDocument.content, processedDocument.originalName);
+    const entities = [...quickEntities, ...llmEntities];
+    await NerService.upsertGraphFromEntities(processedDocument.id, processedDocument.originalName, entities);
+
     // Store document metadata in database
     const documentRecord = await DatabaseService.createDocument({
       id: processedDocument.id,
@@ -78,6 +95,8 @@ fileUploadRouter.post('/', async (req, res) => {
       content: processedDocument.content,
       summary,
       topics,
+      classification,
+      entities,
       metadata: processedDocument.metadata,
       chunkCount: processedDocument.chunks.length,
       fileSize: req.file.size // Add file size from multer

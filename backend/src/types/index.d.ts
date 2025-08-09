@@ -24,3 +24,8 @@ declare module 'pdf-parse' {
 declare module '@xenova/transformers' {
   export const pipeline: any;
 }
+
+declare module 'compromise' {
+  const nlp: any;
+  export default nlp;
+}

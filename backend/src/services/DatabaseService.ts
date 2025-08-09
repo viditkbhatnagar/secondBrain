@@ -1,4 +1,4 @@
-import { DocumentModel, DocumentChunkModel, UserSessionModel, SearchQueryModel, connectDB, getDBStats, IDocument, ChatThreadModel, ChatMessageModel } from '../models/index';
+import { DocumentModel, DocumentChunkModel, UserSessionModel, SearchQueryModel, connectDB, getDBStats, IDocument, ChatThreadModel, ChatMessageModel, SavedSearchModel } from '../models/index';
 
 export interface DocumentRecord {
   id: string;
@@ -8,6 +8,11 @@ export interface DocumentRecord {
   content: string;
   summary?: string;
   topics?: string[];
+  classification?: {
+    label: string;
+    confidence: number;
+    candidates?: Array<{ label: string; confidence: number }>;
+  };
   wordCount: number;
   characters: number;
   chunkCount: number;
@@ -27,6 +32,12 @@ export interface CreateDocumentInput {
   content: string;
   summary?: string;
   topics?: string[];
+  classification?: {
+    label: string;
+    confidence: number;
+    candidates?: Array<{ label: string; confidence: number }>;
+  };
+  entities?: Array<{ type: string; text: string; value?: string; start?: number; end?: number }>;
   metadata: {
     pageCount?: number;
     wordCount: number;
@@ -66,6 +77,8 @@ export class DatabaseService {
         content: input.content,
         summary: input.summary,
         topics: input.topics || [],
+        classification: input.classification,
+        entities: input.entities || [],
         wordCount: input.metadata.wordCount,
         characters: input.metadata.characters,
         chunkCount: input.chunkCount,
@@ -90,6 +103,8 @@ export class DatabaseService {
         content: document.content,
         summary: document.summary,
         topics: document.topics,
+        classification: document.classification,
+        // entities are excluded by getAllDocuments but included here for by-id fetch
         wordCount: document.wordCount,
         characters: document.characters,
         chunkCount: document.chunkCount,
@@ -386,6 +401,22 @@ export class DatabaseService {
 
   static async getMessages(threadId: string, limit: number = 100) {
     return ChatMessageModel.find({ threadId }).sort({ createdAt: 1 }).limit(limit).lean();
+  }
+
+  // Saved searches
+  static async createSavedSearch(query: string, alertFrequency?: 'daily' | 'weekly' | 'monthly') {
+    const id = `ss_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    const s = new SavedSearchModel({ id, query, alertFrequency });
+    await s.save();
+    return { id };
+  }
+
+  static async listSavedSearches(limit: number = 100) {
+    return SavedSearchModel.find({}).sort({ createdAt: -1 }).limit(limit).lean();
+  }
+
+  static async deleteSavedSearch(id: string) {
+    await SavedSearchModel.deleteOne({ id }).exec();
   }
 
   static async updateThreadTitle(threadId: string, title: string): Promise<void> {

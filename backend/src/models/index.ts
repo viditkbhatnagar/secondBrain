@@ -9,6 +9,12 @@ export interface IDocument extends Document {
   content: string;
   summary?: string;
   topics?: string[];
+  classification?: {
+    label: string;
+    confidence: number;
+    candidates?: Array<{ label: string; confidence: number }>;
+  };
+  entities?: Array<{ type: string; text: string; value?: string; start?: number; end?: number }>;
   wordCount: number;
   characters: number;
   chunkCount: number;
@@ -18,6 +24,7 @@ export interface IDocument extends Document {
   fileSize: number;
   language?: string;
   extractedAt: Date;
+  clusterId?: string;
 }
 
 // Document chunk for vector search
@@ -56,6 +63,15 @@ export interface ISearchQuery extends Document {
   timestamp: Date;
 }
 
+// Saved searches (for alerts)
+export interface ISavedSearch extends Document {
+  id: string;
+  query: string;
+  createdAt: Date;
+  alertFrequency?: 'daily' | 'weekly' | 'monthly';
+  lastRunAt?: Date;
+}
+
 // Chat thread and message models
 export interface IChatThread extends Document {
   threadId: string;
@@ -77,6 +93,27 @@ export interface IChatMessage extends Document {
   createdAt: Date;
 }
 
+// Graph models
+export interface IGraphNode extends Document {
+  id: string; // generated
+  type: string; // PERSON, ORG, TOPIC, DOCUMENT, etc.
+  label: string; // display text
+  refId?: string; // link to documentId or entity key
+  properties?: any;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IGraphEdge extends Document {
+  id: string;
+  from: string; // node id
+  to: string; // node id
+  type: string; // MENTIONS, RELATES_TO, HAS_TOPIC, etc.
+  confidence?: number;
+  properties?: any; // provenance { docId, chunkId, offsets }
+  createdAt: Date;
+}
+
 // Document schema
 const DocumentSchema = new Schema<IDocument>({
   id: { type: String, required: true, unique: true, index: true },
@@ -86,6 +123,12 @@ const DocumentSchema = new Schema<IDocument>({
   content: { type: String, required: true },
   summary: { type: String },
   topics: [{ type: String, index: true }],
+  classification: {
+    label: { type: String, index: true },
+    confidence: { type: Number },
+    candidates: [{ label: String, confidence: Number }]
+  },
+  entities: [{ type: { type: String }, text: String, value: String, start: Number, end: Number }],
   wordCount: { type: Number, required: true, index: true },
   characters: { type: Number, required: true },
   chunkCount: { type: Number, required: true },
@@ -94,7 +137,8 @@ const DocumentSchema = new Schema<IDocument>({
   updatedAt: { type: Date, default: Date.now },
   fileSize: { type: Number, required: true },
   language: { type: String, default: 'en' },
-  extractedAt: { type: Date, required: true }
+  extractedAt: { type: Date, required: true },
+  clusterId: { type: String, index: true }
 });
 
 // Add text indexes for search functionality
@@ -182,6 +226,41 @@ const ChatMessageSchema = new Schema<IChatMessage>({
 
 export const ChatThreadModel = mongoose.model<IChatThread>('ChatThread', ChatThreadSchema);
 export const ChatMessageModel = mongoose.model<IChatMessage>('ChatMessage', ChatMessageSchema);
+
+// Graph schemas
+const GraphNodeSchema = new Schema<IGraphNode>({
+  id: { type: String, required: true, unique: true, index: true },
+  type: { type: String, required: true, index: true },
+  label: { type: String, required: true, index: true },
+  refId: { type: String, index: true },
+  properties: { type: Schema.Types.Mixed },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const GraphEdgeSchema = new Schema<IGraphEdge>({
+  id: { type: String, required: true, unique: true, index: true },
+  from: { type: String, required: true, index: true },
+  to: { type: String, required: true, index: true },
+  type: { type: String, required: true, index: true },
+  confidence: { type: Number },
+  properties: { type: Schema.Types.Mixed },
+  createdAt: { type: Date, default: Date.now, index: true }
+});
+
+export const GraphNodeModel = mongoose.model<IGraphNode>('GraphNode', GraphNodeSchema);
+export const GraphEdgeModel = mongoose.model<IGraphEdge>('GraphEdge', GraphEdgeSchema);
+
+// Saved Search schema
+const SavedSearchSchema = new Schema<ISavedSearch>({
+  id: { type: String, required: true, unique: true, index: true },
+  query: { type: String, required: true, index: true },
+  createdAt: { type: Date, default: Date.now, index: true },
+  alertFrequency: { type: String },
+  lastRunAt: { type: Date }
+});
+
+export const SavedSearchModel = mongoose.model<ISavedSearch>('SavedSearch', SavedSearchSchema);
 
 // Helper function to connect to MongoDB
 export const connectDB = async (): Promise<void> => {

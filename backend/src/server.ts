@@ -9,6 +9,8 @@ import { fileUploadRouter } from './routes/fileUpload';
 import { searchRouter } from './routes/search';
 import { documentsRouter } from './routes/documents';
 import { chatRouter } from './routes/chat';
+import { adminRouter } from './routes/admin';
+import { graphRouter } from './routes/graph';
 import { DatabaseService } from './services/DatabaseService';
 import { VectorService } from './services/VectorService';
 import { ClaudeService } from './services/ClaudeService';
@@ -65,12 +67,12 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     console.log(`📁 Uploading file: ${file.originalname} (${file.mimetype})`);
     
-    const allowedTypes = ['.pdf', '.docx', '.txt', '.md'];
+    const allowedTypes = ['.pdf', '.docx', '.txt', '.md', '.png', '.jpg', '.jpeg', '.json'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowedTypes.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only PDF, DOCX, TXT, and MD files are allowed.'));
+      cb(new Error('Invalid file type. Only PDF, DOCX, TXT, MD, PNG, JPG, and JSON files are allowed.'));
     }
   }
 });
@@ -80,6 +82,8 @@ app.use('/api/upload', upload.single('file'), fileUploadRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/graph', graphRouter);
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {

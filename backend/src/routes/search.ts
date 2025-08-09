@@ -233,7 +233,6 @@ searchRouter.post('/documents', async (req, res) => {
   }
 });
 
-// Agentic chat-style endpoint (phase 2 minimal non-streaming)
 // SSE streaming agent endpoint
 searchRouter.get('/agent/stream', async (req: Request, res: Response) => {
   try {

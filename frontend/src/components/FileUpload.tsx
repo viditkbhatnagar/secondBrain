@@ -31,7 +31,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
       'text/plain': ['.txt'],
-      'text/markdown': ['.md']
+      'text/markdown': ['.md'],
+      'image/png': ['.png'],
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'application/json': ['.json']
     },
     maxSize: 100 * 1024 * 1024, // Increased to 100MB
     multiple: false
@@ -206,7 +209,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
                 {isDragActive ? 'Drop your file here' : 'Drop files here or click to browse'}
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                Supports PDF, DOCX, TXT, and MD files (max 100MB)
+                Supports PDF, DOCX, TXT, MD, PNG, JPG, and JSON files (max 100MB)
               </p>
             </div>
           </div>

@@ -1,15 +1,21 @@
-# Personal Knowledge Base with AI Search
+# Personal Knowledge Base with AI Search (Full RAG + Agent + KG + Multimodal)
 
-A full-stack application that allows you to upload documents (PDF, DOCX, TXT, MD) and search through them using AI-powered natural language queries.
+An end-to-end, production-style RAG system that ingests and understands your files (PDF, DOCX, TXT, MD, PNG/JPG images, JSON), extracts structure (NER, classification), builds a Knowledge Graph, and answers questions with Agentic reasoning and Graph RAG. Includes hybrid retrieval, cross-encoder reranking, streaming answers, document management, clustering, classified views, entity explorer, and a chat agent with traces.
 
-## Features
+## Features (What this app does now)
 
-- 📄 **Document Upload**: Support for PDF, DOCX, TXT, and Markdown files
+- 📄 **Document Upload**: Support for PDF, DOCX, TXT, MD, PNG/JPG (OCR), JSON
 - 🔍 **AI-Powered Search**: Ask questions in natural language and get intelligent answers
 - 🧠 **Smart Chunking**: Automatically breaks documents into searchable chunks
 - 📊 **Document Management**: View, organize, and delete your uploaded documents
 - 🎯 **Relevance Scoring**: Shows confidence levels and source relevance
 - ⚡ **Fast Vector Search**: Efficient similarity search using embeddings
+- 🧩 **Hybrid Retrieval**: Keyword (textScore) + vector blending; optional reranking
+- 🤝 **Agentic Search**: Chat agent with clarifying questions, streaming SSE, and traces
+- 🧬 **Document Intelligence**: Classification (zero-shot + heuristics), NER (quick+LLM), entities panel, classified folders
+- 🧭 **Clusters**: K-means over document embeddings, LLM cluster summaries
+- 🕸️ **Knowledge Graph**: Entities and MENTIONS edges; Graph Explorer; groundwork for Graph RAG
+- 🖼️ **Multimodal**: OCR for scanned PDFs and images; JSON parsing/flattening
 
 ## Tech Stack
 
@@ -23,8 +29,8 @@ A full-stack application that allows you to upload documents (PDF, DOCX, TXT, MD
 - Node.js with Express and TypeScript
 - Claude API for question answering
 - OpenAI API for embeddings generation
-- In-memory vector storage (easily replaceable with Pinecone/Chroma)
-- PDF.js and Mammoth for document processing
+- MongoDB for metadata, vectors (embedded arrays), KG nodes/edges, and analytics
+- Mammoth (DOCX), pdf-parse (PDF), Tesseract+Poppler (OCR), JSON flattening
 
 ## Prerequisites
 
@@ -237,9 +243,9 @@ graph TB
     FileSystem --> FileProc
 ```
 
-## Detailed System Flow
+## Detailed System Flow (Phase-by-Phase)
 
-### 1. Document Upload and Processing Pipeline
+### Phase 1 — Core RAG: Upload → Chunk → Embeddings → Hybrid Search → Answer
 
 ```mermaid
 sequenceDiagram
@@ -251,12 +257,17 @@ sequenceDiagram
     participant MongoDB
     participant Claude
     
-    User->>Frontend: Upload Document (PDF/DOCX/TXT/MD)
+    User->>Frontend: Upload Document (PDF/DOCX/TXT/MD/PNG/JPG/JSON)
     Frontend->>API: POST /api/upload with file
     API->>FileProcessor: Process uploaded file
     
     Note over FileProcessor: Text Extraction Phase
-    FileProcessor->>FileProcessor: Extract text based on file type
+    FileProcessor->>FileProcessor: Extract text based on file type (PDF/DOCX/TXT/MD/JSON)
+    alt PDF has no text
+      FileProcessor->>FileProcessor: OCR PDF pages with pdftoppm + Tesseract
+    else Image
+      FileProcessor->>FileProcessor: OCR image with Tesseract
+    end
     FileProcessor->>FileProcessor: Clean and normalize text
     FileProcessor->>FileProcessor: Split into overlapping chunks (1000 words)
     
@@ -278,7 +289,7 @@ sequenceDiagram
     Frontend-->>User: Display success + document details
 ```
 
-### 2. Search and Retrieval System
+### Phase 1 (continued) — Search and Retrieval System
 
 ```mermaid
 sequenceDiagram
@@ -315,7 +326,7 @@ sequenceDiagram
     Frontend-->>User: Display answer + sources + confidence
 ```
 
-## Core Technologies and Algorithms
+### Phase 1 — Core Technologies and Algorithms
 
 ### 1. Text Extraction and Processing
 
@@ -365,7 +376,7 @@ function cosineSimilarity(vectorA, vectorB) {
 }
 ```
 
-### 3. Claude AI Integration
+### Claude AI Integration
 
 **Natural Language Processing:**
 - **Model**: `claude-3-haiku-20240307`
@@ -427,7 +438,7 @@ Instructions:
 }
 ```
 
-## Search Query Processing
+## Search Query Processing (Phase 1)
 
 ### Query Analysis and Matching
 
@@ -557,6 +568,239 @@ The system implements a Retrieval-Augmented Generation (RAG) architecture:
 6. **Answer Generation**: Context + Query → Claude AI → Natural Language Answer
 
 This architecture ensures accurate, contextual responses based on the user's specific document corpus while maintaining high performance and scalability.
+
+---
+
+# Phases Implemented
+
+## Phase 1 — Core RAG
+
+- Upload: PDF/DOCX/TXT/MD/JSON/Images → extraction (OCR fallback) → clean → chunk → embeddings
+- Hybrid search: text index + vector, blending and optional reranking
+- Claude answers with streaming SSE (chat and search), citations, and confidence
+
+```mermaid
+flowchart LR
+  A[Upload File] --> B[Extract/ OCR]
+  B --> C[Clean & Chunk]
+  C --> D[Embeddings]
+  D --> E[Mongo Vectors]
+  Q[Query] --> R[Hybrid Retriever]
+  R --> S[Reranker]
+  S --> T[Claude Answer]
+  T --> U[Frontend Streaming]
+```
+
+### Deep‑dive: What happens in Phase 1
+
+- Upload & Extraction
+  - Frontend accepts PDF/DOCX/TXT/MD/PNG/JPG/JSON. The file is sent to `POST /api/upload`.
+  - `FileProcessor` extracts text:
+    - PDF: `pdf-parse`; if empty → OCR fallback: `pdftoppm` → images → `tesseract`.
+    - DOCX: `mammoth.extractRawText`.
+    - TXT/MD: file read.
+    - JSON: parsed and flattened into readable text lines.
+  - Text is normalized (line endings, whitespace) and split by semantic splitter (LangChain `RecursiveCharacterTextSplitter`).
+  - Metadata is computed (word/char counts, pages, timestamps).
+
+- Embeddings & Vector Storage
+  - Chunks are embedded with OpenAI `text-embedding-3-small`.
+  - Vectors and chunk metadata are saved in Mongo (`DocumentChunkModel`).
+
+- Document Intelligence (preview for later phases)
+  - On upload, `ClassificationService` (heuristic + LLM zero‑shot) attaches `classification`.
+  - `NerService` extracts entities (regex + LLM) and stores them; also upserts nodes/edges in the KG.
+
+- Hybrid Search & Answer
+  - `/api/search` embeds the query and runs hybrid retrieval: Mongo text score + cosine similarity → blended ranking and optional cross‑encoder reranking.
+  - `ClaudeService.answerQuestion` forms a prompt with citations and returns an answer; confidence is computed from similarities.
+  - Frontend renders answer, confidence, sources; SSE used for streaming in chat/agent endpoints.
+
+## Phase 2 — Agentic search
+
+- Agent orchestrator: clarify → retrieve (hybrid/graph-aware) → fallback → answer
+- SSE endpoint streams agent steps: clarify, retrieval metrics, partial tokens, final trace
+- Chat threads persisted; rename/delete; recent searches
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Agent
+  participant Retriever
+  participant Claude
+  User->>Agent: Ask question
+  Agent->>Agent: Maybe clarifying question
+  Agent->>Retriever: Retrieve (hybrid)
+  Retriever-->>Agent: Chunks + scores
+  Agent->>Claude: Compose answer with citations
+  Claude-->>Agent: Answer
+  Agent-->>User: Stream tokens + trace
+```
+
+### Deep‑dive: What happens in Phase 2
+
+- Agent Orchestration (`AgentService`)
+  - `maybeClarify` uses short heuristics + Claude to generate a concise clarifying question when needed.
+  - `retrieve` executes your selected strategy (hybrid by default), collects traces, and optionally narrows to a KG neighborhood (Graph RAG groundwork).
+  - `answer` asks Claude with strict instructions for grounded, cited responses.
+  - Fallback: If hybrid returns no chunks, agent attempts vector‑only retrieval.
+
+- SSE Streaming
+  - `GET /api/search/agent/stream` emits server‑sent events: `thread`, `clarify`, `retrieval`, multiple `answer` token slices, and `done` with final trace. The chat UI appends partial tokens live and renders the agent timeline (steps + chunk previews + deep‑links).
+
+- Threads & Messages
+  - A thread is created for new conversations; messages (user/assistant) are persisted with optional metadata (strategy/rerank) and `agentTrace` for reproducible runs.
+
+## Phase 3 — Document Intelligence
+
+- Classification: heuristic + LLM zero-shot per document
+- NER: quick regex + LLM entities, entity explorer, entity filters
+- Classified view: dynamic folders by classification
+- Clusters: k-means over doc embeddings, LLM cluster summaries
+
+```mermaid
+graph TD
+  A[Doc Text] --> B[Classification]
+  A --> C[NER Entities]
+  B --> D[Classified View]
+  C --> E[Entities Panel]
+  A --> F[Doc Embedding]
+  F --> G[K-means Clusters]
+  G --> H[Cluster Summaries]
+```
+
+### Deep‑dive: What happens in Phase 3
+
+- Super‑intelligent Classification
+  - Heuristic cues + filename hints + LLM zero‑shot with strict JSON schema; we blend confidences and store top candidates.
+  - Dynamic folders in the “Classified” tab group documents by `classification.label` (e.g., Resume, Government Document, Rental Agreement).
+
+- NER & Entities Explorer
+  - Quick regex extraction: DATE/MONEY/EMAIL/PHONE/ORG/PERSON.
+  - LLM adds higher‑level entities (ADDRESS, CONTRACT_PARTY, ID_NUMBER) with better recall.
+  - `GET /api/documents/entities?type=` aggregates values across the corpus; clicking a value filters documents via `GET /api/documents/by-entity?type=&text=&classLabel=`.
+
+- Clusters
+  - Document‑level embeddings = mean of chunk embeddings.
+  - K‑means assigns `clusterId` per document; “Clusters” tab shows sizes, docs, and an LLM summary per cluster.
+
+## Phase 4 — Graph & Multimodal
+
+- Knowledge Graph: nodes (Document/Entity) and edges (MENTIONS, RELATES_TO)
+- Graph Explorer API and basic UI
+- Graph RAG groundwork: narrow search to k-hop doc neighborhood
+- Multimodal ingestion: OCR for images & scanned PDFs; JSON flattening supported
+
+```mermaid
+graph LR
+  D[Document] --MENTIONS--> E1[Entity]
+  D --MENTIONS--> E2[Entity]
+  E1 --RELATES_TO--> E2
+  Q[Query] --> G[Graph Neighborhood]
+  G --> V[Vector Search over Subgraph]
+  V --> A[Answer]
+```
+
+### Deep‑dive: What happens in Phase 4
+
+- Knowledge Graph (KG)
+  - Storage: `GraphNode(type,label,refId,properties)` and `GraphEdge(from,to,type,confidence,properties)` in Mongo.
+  - On upload, entities are upserted; `MENTIONS` edges link `DOCUMENT:<docId>` → `ENTITY` nodes with provenance.
+  - Graph API: `GET /api/graph/entity/:id` returns a 1–2 hop neighborhood for Graph Explorer.
+
+- Graph RAG groundwork
+  - If the agent query contains structured hints (e.g., `PERSON:John`), we fetch that node’s neighborhood and restrict vector search to those documents (reduced set, higher precision) before answering.
+
+- Multimodal ingestion
+  - Images (PNG/JPG) are OCR’d via Tesseract; PDFs with no extractable text are OCR’d via `pdftoppm + tesseract`.
+  - JSON is parsed and flattened to text for uniform chunking/embeddings/NER/classification.
+
+---
+
+# Backend Internals Map
+
+```mermaid
+graph TD
+  subgraph Services
+    FP[FileProcessor]:::svc --> VS[VectorService]:::svc
+    FP --> CLS[ClassificationService]:::svc
+    FP --> NER[NerService]:::svc
+    NER --> GS[GraphService]:::svc
+    AG[AgentService]:::svc --> VS
+    AG --> CLSvc[ClaudeService]:::svc
+  end
+  subgraph Routes
+    U[/upload/]:::rt
+    S[/search/]:::rt
+    D[/documents/]:::rt
+    C[/chat/]:::rt
+    Amd[/admin/]:::rt
+    G[/graph/]:::rt
+  end
+  U --> FP
+  S --> VS
+  S --> AG
+  D --> VS
+  D --> FP
+  C --> AG
+  Amd --> VS
+  G --> GS
+
+classDef svc fill:#eef,stroke:#669;
+classDef rt fill:#efe,stroke:#696;
+```
+
+## Important Endpoints
+
+- Upload & Info
+  - `POST /api/upload` — upload file (PDF/DOCX/TXT/MD/JSON/PNG/JPG)
+  - `GET /api/health`
+
+- Search & Agent
+  - `POST /api/search` — RAG (hybrid/vector, rerank)
+  - `GET /api/search/agent/stream` — streaming agent with steps and partial tokens
+  - `POST /api/search/agent` — agent (non‑streaming)
+
+- Documents & Entities
+  - `GET /api/documents` — list (without content)
+  - `GET /api/documents/:id` — full record
+  - `DELETE /api/documents/:id` — remove
+  - `GET /api/documents/:id/chunks` — chunks for preview
+  - `GET /api/documents/stats` — stats
+  - `GET /api/documents/entities?type=` — aggregated values
+  - `GET /api/documents/by-entity?type=&text=&classLabel=` — filter docs by entity (and optional classification)
+
+- Graph & Admin
+  - `GET /api/graph/entity/:id` — neighborhood (1–2 hops)
+  - `POST /api/admin/cluster` — run k‑means clustering
+  - `GET /api/admin/clusters` — cluster sizes
+  - `GET /api/admin/cluster/:id/docs` — docs in a cluster
+  - `POST /api/admin/cluster/:id/summary` — LLM summary
+
+---
+
+# UI Features (How to use)
+
+- Upload: Drag and drop; OCR kicks in automatically for images/scanned PDFs; JSON flattened.
+- Search: Choose strategy (Hybrid/Vector) and Rerank toggle; observe confidence and sources.
+- Chat: Live token stream, clarifying questions, and agent trace with chunk previews.
+- Library: Entities sidebar to filter; Classified tab groups by label; Clusters tab shows k‑means groups with LLM summaries.
+- Graph Explorer: Load any entity id (e.g., `DOCUMENT:<docId>` or `PERSON:Name`) to view neighborhoods.
+
+---
+
+# Security & PII (in‑progress)
+
+- PII entities are detected; masking toggle and report export are planned in the Library UI.
+
+---
+
+# Roadmap (next)
+
+- Graph RAG v1 (default for entity‑anchored queries) + NLI faithfulness checks
+- Saved Searches endpoints + UI + minimal scheduler and notifications
+- Library preview with highlights & PII toggle/report
+- Structured extractors (invoices, contracts, IDs) with schema validation
 
 ## Estimated Pricing of Running This App
 

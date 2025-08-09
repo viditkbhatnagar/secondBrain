@@ -1,6 +1,6 @@
 import { ClaudeService, RelevantChunk } from './ClaudeService';
 import { DocumentChunk } from './FileProcessor';
-import { DocumentChunkModel } from '../models/index';
+import { DocumentChunkModel, DocumentModel } from '../models/index';
 
 export interface StoredVector {
   id: string;
@@ -134,6 +134,40 @@ export class VectorService {
     } catch (error: any) {
       console.error('Error searching similar chunks:', error);
       throw new Error(`Failed to search similar chunks: ${error.message}`);
+    }
+  }
+
+  /** Search restricted to a set of documentIds */
+  static async searchSimilarWithin(
+    query: string,
+    docIds: string[],
+    limit: number = 5,
+    minSimilarity: number = 0.2
+  ): Promise<RelevantChunk[]> {
+    try {
+      if (!query.trim()) throw new Error('Search query cannot be empty');
+      if (!docIds || docIds.length === 0) return [];
+
+      const queryEmbedding = await ClaudeService.generateEmbedding(query);
+      const allChunks = await DocumentChunkModel.find({ documentId: { $in: docIds } }).exec();
+      const similarities: Array<{ chunk: any; similarity: number }> = [];
+      for (const chunk of allChunks) {
+        if (!chunk.embedding || chunk.embedding.length === 0) continue;
+        const sim = this.cosineSimilarity(queryEmbedding, chunk.embedding);
+        if (sim >= minSimilarity) similarities.push({ chunk, similarity: sim });
+      }
+      similarities.sort((a, b) => b.similarity - a.similarity);
+      const top = similarities.slice(0, limit);
+      return top.map(r => ({
+        content: r.chunk.content,
+        documentName: r.chunk.documentName,
+        documentId: r.chunk.documentId,
+        chunkId: r.chunk.chunkId,
+        similarity: r.similarity
+      }));
+    } catch (e: any) {
+      console.error('Error searchSimilarWithin:', e);
+      return [];
     }
   }
 
@@ -403,6 +437,84 @@ export class VectorService {
       console.error('Error getting document chunks:', error);
       throw new Error('Failed to get document chunks');
     }
+  }
+
+  /**
+   * Compute document-level embeddings by averaging chunk embeddings
+   */
+  static async computeDocumentEmbeddings(): Promise<Map<string, number[]>> {
+    const all = await DocumentChunkModel.find({}).lean();
+    const byDoc: Record<string, number[][]> = {} as any;
+    for (const c of all as any[]) {
+      if (!c.embedding || c.embedding.length === 0) continue;
+      byDoc[c.documentId] = byDoc[c.documentId] || [];
+      byDoc[c.documentId].push(c.embedding);
+    }
+    const map = new Map<string, number[]>();
+    for (const [docId, arrs] of Object.entries(byDoc)) {
+      const mean = this.meanVector(arrs);
+      map.set(docId, mean);
+    }
+    return map;
+  }
+
+  private static meanVector(vectors: number[][]): number[] {
+    if (vectors.length === 0) return [];
+    const dim = vectors[0].length;
+    const sum = new Array(dim).fill(0);
+    for (const v of vectors) {
+      for (let i = 0; i < dim; i++) sum[i] += v[i];
+    }
+    return sum.map(s => s / vectors.length);
+  }
+
+  /**
+   * Simple k-means clustering for document embeddings
+   */
+  static async clusterDocuments(k: number = 5, maxIter: number = 10): Promise<Array<{ clusterId: string; size: number }>> {
+    const embeddings = await this.computeDocumentEmbeddings();
+    const entries = Array.from(embeddings.entries());
+    if (entries.length === 0) return [];
+
+    // Initialize centroids from first k docs
+    const centroids = entries.slice(0, Math.min(k, entries.length)).map(([, emb]) => emb.slice());
+    let assignments: number[] = new Array(entries.length).fill(0);
+
+    const distance = (a: number[], b: number[]) => 1 - this.cosineSimilarity(a, b);
+
+    for (let iter = 0; iter < maxIter; iter++) {
+      // Assign
+      let changed = false;
+      for (let i = 0; i < entries.length; i++) {
+        const emb = entries[i][1];
+        let best = 0;
+        let bestDist = Infinity;
+        for (let c = 0; c < centroids.length; c++) {
+          const dist = distance(emb, centroids[c]);
+          if (dist < bestDist) { bestDist = dist; best = c; }
+        }
+        if (assignments[i] !== best) { assignments[i] = best; changed = true; }
+      }
+      // Update
+      const grouped: number[][][] = centroids.map(() => []);
+      for (let i = 0; i < entries.length; i++) {
+        grouped[assignments[i]].push(entries[i][1]);
+      }
+      for (let c = 0; c < centroids.length; c++) {
+        if (grouped[c].length > 0) centroids[c] = this.meanVector(grouped[c]);
+      }
+      if (!changed) break;
+    }
+
+    // Persist clusterId on documents
+    const counts = new Array(centroids.length).fill(0);
+    for (let i = 0; i < entries.length; i++) {
+      const docId = entries[i][0];
+      const clusterIndex = assignments[i];
+      counts[clusterIndex]++;
+      await DocumentModel.findOneAndUpdate({ id: docId }, { clusterId: `c${clusterIndex}` }).exec();
+    }
+    return counts.map((size, idx) => ({ clusterId: `c${idx}`, size }));
   }
 
   /**

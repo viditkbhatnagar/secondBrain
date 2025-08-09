@@ -3,12 +3,15 @@ import { FileUpload } from './components/FileUpload';
 import { SearchInterface } from './components/SearchInterface';
 import { DocumentLibrary } from './components/DocumentLibrary';
 import { SearchResults } from './components/SearchResults';
-import { Brain, Search, Library, Upload, Menu, MessageSquare } from 'lucide-react';
+import { Brain, Search, Library, Upload, Menu, MessageSquare, Layers } from 'lucide-react';
 import { API_ENDPOINTS } from './config/api';
 import './App.css';
 import RightSidebar from './components/RightSidebar';
 import Chat from './components/Chat';
 import HashListener from './components/HashListener';
+import ClassifiedView from './components/ClassifiedView';
+import EntitiesPanel from './components/EntitiesPanel';
+import ClustersView from './components/ClustersView';
 
 export interface Document {
   id: string;
@@ -41,7 +44,7 @@ export interface SearchResult {
   };
 }
 
-type ActiveTab = 'upload' | 'search' | 'library' | 'chat';
+type ActiveTab = 'upload' | 'search' | 'library' | 'classified' | 'clusters' | 'chat';
 
 function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('upload');
@@ -271,6 +274,28 @@ function App() {
               <Library className="h-4 w-4" />
               <span>Library</span>
             </button>
+            <button
+              onClick={() => setActiveTab('classified')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'classified'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Library className="h-4 w-4" />
+              <span>Classified</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('clusters')}
+              className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                activeTab === 'clusters'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Layers className="h-4 w-4" />
+              <span>Clusters</span>
+            </button>
           </div>
         </div>
       </nav>
@@ -326,11 +351,47 @@ function App() {
         )}
         
         {activeTab === 'library' && (
-          <DocumentLibrary 
-            documents={documents} 
-            onDeleteDocument={handleDeleteDocument}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="md:col-span-3">
+              <DocumentLibrary 
+                documents={documents} 
+                onDeleteDocument={handleDeleteDocument}
+              />
+            </div>
+            <div className="md:col-span-1">
+              <EntitiesPanel onSelect={async (e) => {
+                // Fetch docs filtered by entity
+                try {
+                  const url = new URL(`${API_ENDPOINTS.documents}/by-entity`, window.location.origin);
+                  url.searchParams.set('type', e.type);
+                  url.searchParams.set('text', e.text);
+                  const res = await fetch(url.toString());
+                  if (res.ok) {
+                    const data = await res.json();
+                    setDocuments(data.documents || []);
+                  }
+                } catch (err) {
+                  console.error('Failed to filter by entity', err);
+                }
+              }} />
+            </div>
+          </div>
         )}
+
+        {activeTab === 'classified' && (
+          <ClassifiedView />
+        )}
+
+        {activeTab === 'clusters' && (
+          <ClustersView />
+        )}
+
+        {activeTab === 'chat' && (
+          <Chat />
+        )}
+
+        {/* Optional standalone clusters view; keep hidden behind classified tab if preferred */}
+        {/* <ClustersView /> */}
 
         {activeTab === 'chat' && (
           <Chat />

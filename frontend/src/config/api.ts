@@ -20,7 +20,9 @@ const getApiBaseUrl = (): string => {
     documents: `${API_BASE_URL}/documents`,
     documentsStats: `${API_BASE_URL}/documents/stats`,
     health: `${API_BASE_URL}/health`,
-    baseChat: `${API_BASE_URL}/chat`
+    baseChat: `${API_BASE_URL}/chat`,
+    baseAdmin: `${API_BASE_URL}/admin`,
+    baseGraph: `${API_BASE_URL}/graph`
   };
   
   // Helper function for making API requests with error handling
