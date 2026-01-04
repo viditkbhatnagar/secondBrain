@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { API_ENDPOINTS } from '../config/api';
 
 export const GraphExplorer: React.FC<{ entityId?: string }>= ({ entityId = 'DOCUMENT:' }) => {
@@ -6,7 +6,7 @@ export const GraphExplorer: React.FC<{ entityId?: string }>= ({ entityId = 'DOCU
   const [edges, setEdges] = useState<any[]>([]);
   const [id, setId] = useState(entityId);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       if (!id) return;
       const res = await fetch(`${API_ENDPOINTS.baseGraph}/entity/${encodeURIComponent(id)}`);
@@ -14,8 +14,9 @@ export const GraphExplorer: React.FC<{ entityId?: string }>= ({ entityId = 'DOCU
       setNodes(data.nodes || []);
       setEdges(data.edges || []);
     } catch {}
-  };
-  useEffect(() => { load(); }, [id]);
+  }, [id]);
+
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="space-y-3">

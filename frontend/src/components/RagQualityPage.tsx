@@ -31,33 +31,33 @@ export const RagQualityPage: React.FC = () => {
 `;
 
   return (
-    <div className="prose prose-gray max-w-none">
-      <h2>RAG Quality</h2>
-      <p>
+    <div className="prose dark:prose-invert prose-secondary max-w-none">
+      <h2 className="text-secondary-900 dark:text-secondary-100">RAG Quality</h2>
+      <p className="text-secondary-700 dark:text-secondary-300">
         Retrieval-Augmented Generation (RAG) combines information retrieval with language models. In this app,
         we implement hybrid retrieval (keyword + semantic) and reranking to improve answer quality and grounding.
       </p>
 
-      <h3>Architecture</h3>
-      <pre className="mermaid">
+      <h3 className="text-secondary-900 dark:text-secondary-100">Architecture</h3>
+      <pre className="mermaid bg-secondary-50 dark:bg-secondary-800 p-4 rounded-lg text-sm overflow-x-auto">
 {diagram1}
       </pre>
 
-      <h3>End-to-end Flow</h3>
-      <pre className="mermaid">
+      <h3 className="text-secondary-900 dark:text-secondary-100">End-to-end Flow</h3>
+      <pre className="mermaid bg-secondary-50 dark:bg-secondary-800 p-4 rounded-lg text-sm overflow-x-auto">
 {diagram2}
       </pre>
 
-      <h3>How it works here</h3>
-      <ul>
-        <li><b>Semantic (Vector) Search</b>: We embed the query and compare via cosine similarity against stored chunk embeddings.</li>
-        <li><b>Keyword Search</b>: MongoDB text index returns BM25-like results with a textScore.</li>
-        <li><b>Hybrid Blending</b>: Scores are normalized and blended with a configurable weight, then reranked.</li>
-        <li><b>Context Construction</b>: Top chunks are formatted with sources and passed to Claude to generate the grounded answer.</li>
+      <h3 className="text-secondary-900 dark:text-secondary-100">How it works here</h3>
+      <ul className="text-secondary-700 dark:text-secondary-300 space-y-2">
+        <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Semantic (Vector) Search</span>: We embed the query and compare via cosine similarity against stored chunk embeddings.</li>
+        <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Keyword Search</span>: MongoDB text index returns BM25-like results with a textScore.</li>
+        <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Hybrid Blending</span>: Scores are normalized and blended with a configurable weight, then reranked.</li>
+        <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Context Construction</span>: Top chunks are formatted with sources and passed to Claude to generate the grounded answer.</li>
       </ul>
 
-      <p>
-        You can switch between <b>Hybrid</b> and <b>Vector</b> strategies in the search box to compare behavior.
+      <p className="text-secondary-700 dark:text-secondary-300 mt-4">
+        You can switch between <span className="font-semibold text-primary-600 dark:text-primary-400">Hybrid</span> and <span className="font-semibold text-primary-600 dark:text-primary-400">Vector</span> strategies in the search box to compare behavior.
       </p>
     </div>
   );

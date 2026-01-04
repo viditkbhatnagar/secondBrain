@@ -1,0 +1,166 @@
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:32:05"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:32:05"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:32:06"}
+{"duration":"343ms","level":"info","message":"Request completed","method":"GET","path":"/","requestId":"4b612543-be96-4daf-8832-6f09f4b8ae69","service":"knowledge-base","statusCode":304,"timestamp":"2026-01-02 23:32:15","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"contentLength":"486","duration":"891ms","level":"info","message":"Request completed","method":"GET","path":"/stats","requestId":"88db08b1-7790-4418-b78d-719f83859637","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-02 23:32:16","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"duration":"288ms","level":"info","message":"Request completed","method":"GET","path":"/","requestId":"8082a4fc-50d3-4367-8439-2f034e829a65","service":"knowledge-base","statusCode":304,"timestamp":"2026-01-02 23:32:16","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"duration":"114ms","level":"info","message":"Request completed","method":"GET","path":"/","requestId":"9bb4acc6-5f43-4cde-ab03-990d9434f68e","service":"knowledge-base","statusCode":304,"timestamp":"2026-01-02 23:32:17","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"contentLength":"470","duration":"841ms","level":"info","message":"Request completed","method":"GET","path":"/stats","requestId":"a51c628e-2bc4-4db0-94bc-49c4b4e8d4c8","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-02 23:32:17","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"contentLength":"466","duration":"844ms","level":"info","message":"Request completed","method":"GET","path":"/stats","requestId":"cecb32ee-9ab0-4b10-89ae-52203a129310","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-02 23:32:18","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:40:11"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:11"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:40:12"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:40:16"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:16"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:40:17"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:40:44"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:44"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:40:45"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:40:59"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:40:59"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:41:00"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:52:17"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:18"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:52:19"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:52:24"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:24"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:52:28"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:28"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:52:29"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:52:47"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:47"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:52:48"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:52:52"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:52"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:52:54"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:54"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:52:55"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:52:59"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:52:59"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:53:00"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:59:33"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:59:33"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:59:34"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-02 23:59:55"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:59:55"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-02 23:59:56"}

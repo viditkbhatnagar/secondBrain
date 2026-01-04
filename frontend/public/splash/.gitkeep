@@ -1,0 +1,8 @@
+# Placeholder for iOS splash screen images
+# Generate splash screens using tools like pwa-asset-generator
+# Required sizes:
+# - splash-640x1136.png (iPhone 5)
+# - splash-750x1334.png (iPhone 6/7/8)
+# - splash-1242x2208.png (iPhone 6/7/8 Plus)
+# - splash-1125x2436.png (iPhone X/XS)
+# - splash-1170x2532.png (iPhone 12/13)

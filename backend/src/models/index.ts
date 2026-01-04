@@ -282,10 +282,18 @@ export const connectDB = async (): Promise<void> => {
       throw new Error(`Invalid MongoDB URI format. Got: "${mongoUri.substring(0, 20)}..."`);
     }
 
+    // Production-optimized connection options
+    const isProduction = process.env.NODE_ENV === 'production';
     const options = {
-      maxPoolSize: 10, // Maintain up to 10 socket connections
-      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      maxPoolSize: isProduction ? 20 : 10, // More connections in production
+      minPoolSize: isProduction ? 5 : 2,   // Keep minimum connections warm
+      serverSelectionTimeoutMS: 10000,     // 10 seconds for server selection
+      socketTimeoutMS: 45000,              // 45 seconds socket timeout
+      connectTimeoutMS: 10000,             // 10 seconds connection timeout
+      retryWrites: true,
+      retryReads: true,
+      maxIdleTimeMS: 60000,                // Close idle connections after 1 minute
+      compressors: ['zlib' as const],     // Enable compression for faster transfers
     };
 
     console.log('🔌 Attempting to connect to MongoDB...');
@@ -301,10 +309,20 @@ export const connectDB = async (): Promise<void> => {
       console.warn('⚠️  MongoDB disconnected');
     });
 
+    mongoose.connection.on('reconnected', () => {
+      console.log('✅ MongoDB reconnected');
+    });
+
     // Graceful shutdown
     process.on('SIGINT', async () => {
       await mongoose.connection.close();
       console.log('📴 MongoDB connection closed through app termination');
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', async () => {
+      await mongoose.connection.close();
+      console.log('📴 MongoDB connection closed through SIGTERM');
       process.exit(0);
     });
 

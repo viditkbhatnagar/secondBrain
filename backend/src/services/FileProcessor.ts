@@ -31,11 +31,16 @@ export interface DocumentChunk {
   startPosition: number;
   endPosition: number;
   wordCount: number;
+  // Enhanced metadata for better retrieval
+  sectionTitle?: string;
+  hasHeader?: boolean;
+  totalChunks?: number;
 }
 
 export class FileProcessor {
-  private static readonly CHUNK_SIZE_CHARS = 1500; // semantic chunking by characters
-  private static readonly CHUNK_OVERLAP_CHARS = 200;
+  // IMPROVED: Smaller chunks for better semantic coherence
+  private static readonly CHUNK_SIZE_CHARS = 800; // ~400-500 tokens (was 1500)
+  private static readonly CHUNK_OVERLAP_CHARS = 150; // Better context preservation (was 200)
 
   /**
    * Process uploaded file and extract text content
@@ -82,7 +87,7 @@ export class FileProcessor {
       // Clean and normalize content
       content = this.cleanText(content);
 
-      // Generate semantic chunks using LangChain splitters (sentence/paragraph aware)
+      // Generate semantic chunks using improved strategy
       const chunks = await this.createSemanticChunks(fileId, content);
 
       // Calculate metadata
@@ -213,17 +218,44 @@ export class FileProcessor {
   }
 
   /**
-   * Split content into overlapping chunks for better search results
+   * Detect section headers in text
+   */
+  private static detectSectionTitle(text: string): string | undefined {
+    // Look for common header patterns at the start of text
+    const lines = text.split('\n').slice(0, 3);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // All caps line (likely header)
+      if (trimmed.length > 3 && trimmed.length < 100 && trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed)) {
+        return trimmed;
+      }
+      // Line ending with colon
+      if (trimmed.endsWith(':') && trimmed.length < 80) {
+        return trimmed.slice(0, -1);
+      }
+      // Numbered section (e.g., "1. Introduction", "Section 2:")
+      if (/^(\d+\.|\d+\)|Section\s+\d+)/i.test(trimmed) && trimmed.length < 80) {
+        return trimmed;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * IMPROVED: Split content into smaller, semantically coherent chunks
    */
   private static async createSemanticChunks(documentId: string, content: string): Promise<DocumentChunk[]> {
+    // Use sentence-aware splitting with smaller chunks
     const splitter = new RecursiveCharacterTextSplitter({
       chunkSize: this.CHUNK_SIZE_CHARS,
       chunkOverlap: this.CHUNK_OVERLAP_CHARS,
+      separators: ['\n\n', '\n', '. ', '! ', '? ', '; ', ', ', ' ', ''], // Prioritize paragraph and sentence boundaries
     });
 
     const docs = await splitter.createDocuments([content]);
     const chunks: DocumentChunk[] = [];
     let runningIndex = 0;
+    const totalChunks = docs.length;
 
     docs.forEach((d, idx) => {
       const text = d.pageContent;
@@ -231,6 +263,11 @@ export class FileProcessor {
       const endPosition = startPosition + text.length;
       runningIndex = Math.max(runningIndex, endPosition);
       const wordCount = text.split(/\s+/).filter(Boolean).length;
+      
+      // Detect section title for this chunk
+      const sectionTitle = this.detectSectionTitle(text);
+      const hasHeader = sectionTitle !== undefined;
+
       chunks.push({
         id: `${documentId}_chunk_${idx}`,
         documentId,
@@ -238,10 +275,14 @@ export class FileProcessor {
         chunkIndex: idx,
         startPosition: Math.max(0, startPosition),
         endPosition: Math.min(content.length, endPosition),
-        wordCount
+        wordCount,
+        sectionTitle,
+        hasHeader,
+        totalChunks
       });
     });
 
+    console.log(`📄 Created ${chunks.length} chunks (avg ${Math.round(content.length / chunks.length)} chars each)`);
     return chunks;
   }
 

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { Layers } from 'lucide-react';
 import { API_ENDPOINTS } from '../config/api';
+import { Card, Button, Badge, EmptyState, Spinner } from './ui';
 
 interface Cluster { clusterId: string; size: number }
 
@@ -46,45 +48,76 @@ export const ClustersView: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Clusters</h2>
-        <button onClick={run} disabled={isRunning} className="px-3 py-2 text-sm bg-blue-600 text-white rounded">{isRunning ? 'Clustering...' : 'Run Clustering'}</button>
+        <h2 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">Clusters</h2>
+        <Button 
+          variant="primary" 
+          size="sm" 
+          onClick={run} 
+          disabled={isRunning}
+          leftIcon={isRunning ? <Spinner size="sm" /> : undefined}
+        >
+          {isRunning ? 'Clustering...' : 'Run Clustering'}
+        </Button>
       </div>
+      
       <div className="grid md:grid-cols-3 gap-4">
-        <div className="md:col-span-1 bg-white border rounded p-3">
-          <div className="text-sm font-semibold mb-2">Cluster List</div>
-          <div className="space-y-2 max-h-72 overflow-auto">
-            {clusters.map(c => (
-              <button key={c.clusterId} onClick={() => openCluster(c.clusterId)} className={`w-full text-left border rounded px-2 py-2 ${selected===c.clusterId ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'}`}>
-                <div className="font-medium">{c.clusterId}</div>
-                <div className="text-xs text-gray-600">{c.size} documents</div>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="md:col-span-2 bg-white border rounded p-3">
+        <Card variant="outlined" padding="md" className="md:col-span-1">
+          <div className="text-sm font-semibold text-secondary-900 dark:text-secondary-100 mb-3">Cluster List</div>
+          {clusters.length === 0 ? (
+            <div className="text-sm text-secondary-500 dark:text-secondary-400 text-center py-4">
+              No clusters yet. Run clustering to group documents.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-auto">
+              {clusters.map(c => (
+                <button 
+                  key={c.clusterId} 
+                  onClick={() => openCluster(c.clusterId)} 
+                  className={`w-full text-left border rounded-lg px-3 py-2 transition-colors ${
+                    selected === c.clusterId 
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-400' 
+                      : 'border-secondary-200 dark:border-secondary-700 hover:bg-secondary-50 dark:hover:bg-secondary-800'
+                  }`}
+                >
+                  <div className="font-medium text-secondary-900 dark:text-secondary-100">{c.clusterId}</div>
+                  <div className="text-xs text-secondary-600 dark:text-secondary-400">{c.size} documents</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+        
+        <Card variant="outlined" padding="md" className="md:col-span-2">
           {selected ? (
             <div>
-              <div className="text-sm font-semibold mb-2">Summary</div>
-              <div className="prose max-w-none text-sm whitespace-pre-wrap mb-4">{summary || '—'}</div>
-              <div className="text-sm font-semibold mb-2">Documents</div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-secondary-900 dark:text-secondary-100">Summary</div>
+                <Badge variant="primary" size="sm">{selected}</Badge>
+              </div>
+              <div className="prose dark:prose-invert max-w-none text-sm whitespace-pre-wrap mb-4 text-secondary-700 dark:text-secondary-300">
+                {summary || '—'}
+              </div>
+              <div className="text-sm font-semibold text-secondary-900 dark:text-secondary-100 mb-2">Documents</div>
               <div className="space-y-2 max-h-72 overflow-auto">
                 {docs.map((d) => (
-                  <div key={d.id} className="border rounded px-2 py-1 text-sm">
-                    <div className="font-medium truncate">{d.originalName}</div>
-                    <div className="text-xs text-gray-600">{new Date(d.uploadedAt).toLocaleString()} • {d.wordCount} words • {d.chunkCount} chunks</div>
+                  <div key={d.id} className="border border-secondary-200 dark:border-secondary-700 rounded-lg px-3 py-2 text-sm bg-secondary-50 dark:bg-secondary-800/50">
+                    <div className="font-medium text-secondary-900 dark:text-secondary-100 truncate">{d.originalName}</div>
+                    <div className="text-xs text-secondary-600 dark:text-secondary-400">{new Date(d.uploadedAt).toLocaleString()} • {d.wordCount} words • {d.chunkCount} chunks</div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="text-sm text-gray-600">Select a cluster to view details</div>
+            <EmptyState
+              icon={<Layers className="h-10 w-10" />}
+              title="Select a cluster"
+              description="Choose a cluster from the list to view its summary and documents"
+            />
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );
 };
 
 export default ClustersView;
-
-

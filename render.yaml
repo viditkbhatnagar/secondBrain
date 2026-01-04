@@ -1,0 +1,71 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+# Optimized for fast RAG responses
+
+services:
+  # Backend API - Optimized for performance
+  - type: web
+    name: secondbrain-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: standard  # Use standard for better performance (more CPU/RAM)
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: MONGODB_URI
+        sync: false  # Set manually in Render dashboard
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false  # Optional: for neural reranking
+      - key: REDIS_ENABLED
+        value: "true"
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: secondbrain-redis
+          property: connectionString
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: secondbrain-frontend
+          property: host
+      - key: LOG_LEVEL
+        value: info
+      - key: CACHE_WARMUP_ON_START
+        value: "true"
+      # Performance optimizations
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=512"
+    disk:
+      name: uploads
+      mountPath: /app/uploads
+      sizeGB: 1
+
+  # Frontend - Static site with CDN
+  - type: web
+    name: secondbrain-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: starter  # Frontend is lightweight
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          type: web
+          name: secondbrain-backend
+          property: host
+
+  # Redis Cache - Critical for fast responses
+  - type: redis
+    name: secondbrain-redis
+    plan: starter  # 25MB, sufficient for caching
+    ipAllowList: []  # Only allow internal connections
