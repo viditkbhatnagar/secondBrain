@@ -1,0 +1,25 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\codes\\Second Brain\\secondBrain\\backend\\logs\\.72fdf1b93feaaa2ef39b6e89568a0b1eae803f7d-audit.json",
+    "files": [
+        {
+            "date": 1767382309382,
+            "name": "C:\\codes\\Second Brain\\secondBrain\\backend\\logs\\app-2026-01-02.log",
+            "hash": "6bbf2d24c776e8c67d2e34c792351d3ed107d15e448c849f6f1671ba46b40729"
+        },
+        {
+            "date": 1767384009050,
+            "name": "C:\\codes\\Second Brain\\secondBrain\\backend\\logs\\app-2026-01-03.log",
+            "hash": "36d50dd833de04a92c1fa7c6e9fddd013e664426726eae43a686d78506017d2a"
+        },
+        {
+            "date": 1767515006524,
+            "name": "C:\\codes\\Second Brain\\secondBrain\\backend\\logs\\app-2026-01-04.log",
+            "hash": "79ffc4493f4d274846df3176c6ac1261e6ac3c6d6af6eb77e731c7b56f353283"
+        }
+    ],
+    "hashType": "sha256"
+}

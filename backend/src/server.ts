@@ -1,26 +1,44 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs-extra';
-import mongoose from 'mongoose';
+import swaggerUi from 'swagger-ui-express';
 import { fileUploadRouter } from './routes/fileUpload';
 import { searchRouter } from './routes/search';
 import { documentsRouter } from './routes/documents';
 import { chatRouter } from './routes/chat';
 import { adminRouter } from './routes/admin';
 import { graphRouter } from './routes/graph';
+import { healthRouter } from './routes/health';
+import analyticsRouter from './routes/analytics';
+import ultimateSearchRouter from './routes/ultimateSearch';
 import { DatabaseService } from './services/DatabaseService';
 import { VectorService } from './services/VectorService';
 import { ClaudeService } from './services/ClaudeService';
+import { redisService } from './services/RedisService';
+import { cacheWarmer } from './services/cacheWarmer';
+import { swaggerSpec } from './config/swagger';
+import { logger } from './utils/logger';
+import { keepAlive } from './utils/keepAlive';
+import { requestLogger } from './middleware/requestLogger';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { apiLimiter, speedLimiter, uploadLimiter } from './middleware/rateLimiter';
+import { helmetConfig, mongoSanitizeConfig, xssSanitizer, suspiciousRequestDetector } from './middleware/security';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware with increased limits for large files
+// Trust proxy for rate limiting behind reverse proxy (Render, Heroku, etc.)
+app.set('trust proxy', 1);
+
+// Security headers (Helmet) - must be early in middleware chain
+app.use(helmetConfig);
+
 // Configure CORS with env overrides for production
 const prodOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
@@ -28,10 +46,56 @@ const prodOrigins = process.env.CORS_ORIGINS
 
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? prodOrigins : ['http://localhost:3000', 'http://localhost:5173'],
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Session-ID', 'Cache-Control'],
+  credentials: true,
+  maxAge: 86400 // 24 hours
 }));
-app.use(express.json({ limit: '100mb' })); // Increased from 50mb
-app.use(express.urlencoded({ extended: true, limit: '100mb' })); // Increased from 50mb
+
+// Response compression - compress all responses > 1KB
+app.use(compression({
+  level: 6,
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers.accept === 'text/event-stream') {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
+
+// Request body parsing with size limits
+app.use(express.json({ limit: '10mb' })); // Reduced from 100mb for security
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Security middleware
+app.use(mongoSanitizeConfig); // NoSQL injection prevention
+app.use(xssSanitizer); // XSS sanitization
+app.use(suspiciousRequestDetector); // Log suspicious requests
+
+// Request logging middleware
+app.use(requestLogger);
+
+// Global rate limiting (skip health checks)
+app.use('/api/', apiLimiter);
+app.use('/api/', speedLimiter);
+
+// HTTP caching headers for API responses
+app.use((req, res, next) => {
+  // Cache static stats for 60 seconds
+  if (req.path === '/api/documents/stats') {
+    res.set('Cache-Control', 'private, max-age=60');
+  }
+  // Cache health checks for 10 seconds
+  else if (req.path.startsWith('/api/health')) {
+    res.set('Cache-Control', 'public, max-age=10');
+  }
+  // No cache for dynamic content by default
+  else {
+    res.set('Cache-Control', 'no-store');
+  }
+  next();
+});
 
 // Add request timeout middleware
 app.use((req, res, next) => {
@@ -61,11 +125,11 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // Increased to 100MB limit
-    fieldSize: 100 * 1024 * 1024 // Field size limit
+    fileSize: 50 * 1024 * 1024, // 50MB limit (reduced from 100MB)
+    fieldSize: 50 * 1024 * 1024
   },
   fileFilter: (req, file, cb) => {
-    console.log(`📁 Uploading file: ${file.originalname} (${file.mimetype})`);
+    logger.info(`📁 Uploading file: ${file.originalname} (${file.mimetype})`);
     
     const allowedTypes = ['.pdf', '.docx', '.txt', '.md', '.png', '.jpg', '.jpeg', '.json'];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -77,64 +141,44 @@ const upload = multer({
   }
 });
 
-// Routes
-app.use('/api/upload', upload.single('file'), fileUploadRouter);
+// Routes with rate limiting
+app.use('/api/upload', uploadLimiter, upload.single('file'), fileUploadRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/graph', graphRouter);
+app.use('/api/health', healthRouter);
+app.use('/api/analytics', analyticsRouter);
+app.use('/api/search', ultimateSearchRouter);
 
-// Health check endpoint
-app.get('/api/health', async (req, res) => {
-  try {
-    // Basic health check with DB state
-    const mongodbState = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-    const health = {
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      mongodb: mongodbState
-    };
+// Swagger API documentation
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Knowledge Base API Docs'
+}));
 
-    res.json(health);
-  } catch (error) {
-    res.status(503).json({
-      status: 'ERROR',
-      timestamp: new Date().toISOString(),
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
+// JSON spec endpoint
+app.get('/api/docs.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
 });
 
-// Error handling middleware
-app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', error);
-  
-  let errorResponse = {
-    error: 'Internal server error',
-    message: 'An unexpected error occurred'
-  };
+// 404 handler for undefined routes
+app.use(notFoundHandler);
 
-  // Handle specific error types
-  if (error.message?.includes('Invalid file type')) {
-    errorResponse = {
-      error: 'Invalid file type',
-      message: 'Only PDF, DOCX, TXT, and MD files are allowed'
-    };
-    return res.status(400).json(errorResponse);
-  }
+// Global error handling middleware (must be last)
+app.use(errorHandler);
 
-  if (error.code === 'LIMIT_FILE_SIZE') {
-    errorResponse = {
-      error: 'File too large',
-      message: 'File size must be less than 100MB'
-    };
-    return res.status(413).json(errorResponse);
-  }
-
-  res.status(500).json(errorResponse);
-});
+// Memory monitoring (log every 60 seconds)
+setInterval(() => {
+  const used = process.memoryUsage();
+  logger.debug('Memory usage', {
+    heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)}MB`,
+    heapTotal: `${Math.round(used.heapTotal / 1024 / 1024)}MB`,
+    rss: `${Math.round(used.rss / 1024 / 1024)}MB`
+  });
+}, 60000);
 
 // Initialize services and start server
 async function startServer() {
@@ -152,33 +196,69 @@ async function startServer() {
       throw new Error('MONGODB_URI is required. Please add your MongoDB connection string to your .env file.');
     }
 
-    console.log('🚀 Starting Personal Knowledge Base Server...');
+    logger.info('🚀 Starting Personal Knowledge Base Server...');
+
+    // Initialize Redis (optional - graceful degradation if unavailable)
+    try {
+      await redisService.initialize();
+      if (redisService.isAvailable()) {
+        logger.info('✅ Redis cache initialized');
+      } else {
+        logger.info('⚠️ Redis not available - using in-memory cache');
+      }
+    } catch (error) {
+      logger.warn('Redis initialization failed - using in-memory cache');
+    }
 
     // Initialize services in order
     ClaudeService.initialize();
-    console.log('✅ Claude service initialized');
+    logger.info('✅ Claude service initialized');
 
     await DatabaseService.initialize();
-    console.log('✅ Database service initialized');
+    logger.info('✅ Database service initialized');
 
     await VectorService.initialize();
-    console.log('✅ Vector service initialized');
+    logger.info('✅ Vector service initialized');
 
     app.listen(PORT, () => {
-      console.log(`🌟 Server running on port ${PORT}`);
-      console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
-      console.log(`🔍 API endpoints:`);
-      console.log(`   📤 Upload: POST /api/upload`);
-      console.log(`   🔎 Search: POST /api/search`);
-      console.log(`   📁 Documents: GET /api/documents`);
-      console.log(`   📊 Stats: GET /api/documents/stats`);
-      console.log('');
-      console.log('🎉 Personal Knowledge Base is ready!');
+      logger.info(`🌟 Server running on port ${PORT}`);
+      logger.info(`📋 Health check: http://localhost:${PORT}/api/health`);
+      logger.info(`📋 Detailed health: http://localhost:${PORT}/api/health/detailed`);
+      logger.info('🔍 API endpoints:');
+      logger.info('   📤 Upload: POST /api/upload');
+      logger.info('   🔎 Search: POST /api/search');
+      logger.info('   🚀 Ultimate Search: POST /api/search/ultimate');
+      logger.info('   📁 Documents: GET /api/documents');
+      logger.info('   📊 Stats: GET /api/documents/stats');
+      logger.info('🎉 Personal Knowledge Base is ready!');
+
+      // Start cache warmup in background (after server is ready)
+      setTimeout(() => {
+        logger.info('🔥 Starting background cache warmup...');
+        cacheWarmer.warmup().catch(err => logger.error('Cache warmup failed:', err));
+        
+        // Schedule periodic cache refresh (every hour)
+        cacheWarmer.scheduleRefresh(3600000);
+        
+        // Start keep-alive for Render (prevents sleeping)
+        keepAlive.start();
+      }, 5000);
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    logger.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 }
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', { promise, reason });
+});
 
 startServer();

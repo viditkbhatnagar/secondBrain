@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { Document } from '../App';
 import { API_ENDPOINTS } from '../config/api';
+import { Button, Card, Progress } from './ui';
 
 interface FileUploadProps {
   onFileUploaded: (document: Document) => void;
@@ -36,7 +37,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       'image/jpeg': ['.jpg', '.jpeg'],
       'application/json': ['.json']
     },
-    maxSize: 100 * 1024 * 1024, // Increased to 100MB
+    maxSize: 100 * 1024 * 1024,
     multiple: false
   });
 
@@ -49,19 +50,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
     formData.append('file', selectedFile);
 
     try {
-      // Create AbortController for timeout handling
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
-
-      console.log(`📁 Uploading file: ${selectedFile.name} (${formatFileSize(selectedFile.size)})`);
+      const timeoutId = setTimeout(() => controller.abort(), 300000);
 
       const response = await fetch(API_ENDPOINTS.upload, {
         method: 'POST',
         body: formData,
         signal: controller.signal,
-        headers: {
-          // Don't set Content-Type - let browser set it with boundary for FormData
-        }
       });
 
       clearTimeout(timeoutId);
@@ -69,7 +64,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       const result = await response.json();
 
       if (!response.ok) {
-        // Handle specific error codes from backend
         throw new Error(result.message || result.error || 'Upload failed');
       }
 
@@ -78,7 +72,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
         message: 'Processing document and generating AI summary...' 
       });
 
-      // Simulate processing time for better UX (shorter for large files)
       const processingDelay = selectedFile.size > 5 * 1024 * 1024 ? 500 : 1000;
       await new Promise(resolve => setTimeout(resolve, processingDelay));
       
@@ -87,10 +80,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
         message: `Successfully processed ${result.document.wordCount} words in ${result.document.chunkCount} chunks` 
       });
 
-      // Call the callback with the new document
       onFileUploaded(result.document);
 
-      // Reset after a delay
       setTimeout(() => {
         setSelectedFile(null);
         setUploadStatus({ status: 'idle' });
@@ -100,43 +91,31 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       console.error('Upload error:', error);
       
       let errorMessage = 'Upload failed. Please try again.';
-      let isRetryable = true;
-      
-      // Handle specific error messages from backend
       const message = error.message || '';
       
       if (error.name === 'AbortError') {
         errorMessage = 'Upload timed out. Please try with a smaller file or check your connection.';
       } else if (message.includes('Configuration Error') || message.includes('invalid')) {
         errorMessage = 'Service configuration error. Please contact the administrator.';
-        isRetryable = false;
       } else if (message.includes('rate limit')) {
         errorMessage = 'Service is temporarily busy. Please try again in a few minutes.';
       } else if (message.includes('quota exceeded') || message.includes('credits')) {
         errorMessage = 'Service quota exceeded. Please contact the administrator.';
-        isRetryable = false;
       } else if (message.includes('File Upload Required')) {
         errorMessage = 'Please select a file to upload.';
       } else if (message.includes('Invalid File Type')) {
         errorMessage = 'Only PDF, DOCX, TXT, and MD files are supported.';
-        isRetryable = false;
       } else if (message.includes('Empty Document')) {
         errorMessage = 'The document appears to be empty or corrupted.';
-        isRetryable = false;
       } else if (message.includes('File Processing Failed') || message.includes('insufficient text')) {
         errorMessage = 'Failed to extract text from the file. It may be corrupted, password-protected, or image-only.';
-        isRetryable = false;
       } else if (message.includes('too large')) {
         errorMessage = 'File is too large. Please upload a file smaller than 100MB.';
-        isRetryable = false;
       } else if (message.includes('NetworkError') || message.includes('fetch')) {
         errorMessage = 'Network error. Please check your connection and try again.';
       }
       
-      setUploadStatus({ 
-        status: 'error', 
-        message: errorMessage
-      });
+      setUploadStatus({ status: 'error', message: errorMessage });
     }
   };
 
@@ -153,28 +132,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getStatusIcon = () => {
-    switch (uploadStatus.status) {
-      case 'success':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case 'error':
-        return <AlertCircle className="h-5 w-5 text-red-500" />;
-      default:
-        return null;
-    }
-  };
-
   const getStatusColor = () => {
     switch (uploadStatus.status) {
       case 'success':
-        return 'text-green-600 bg-green-50';
+        return 'bg-success-50 dark:bg-success-900/20 border-success-200 dark:border-success-800';
       case 'error':
-        return 'text-red-600 bg-red-50';
+        return 'bg-danger-50 dark:bg-danger-900/20 border-danger-200 dark:border-danger-800';
       case 'uploading':
       case 'processing':
-        return 'text-blue-600 bg-blue-50';
+        return 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800';
       default:
-        return 'text-gray-600 bg-gray-50';
+        return 'bg-secondary-50 dark:bg-secondary-800 border-secondary-200 dark:border-secondary-700';
     }
   };
 
@@ -182,8 +150,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900">Upload Documents</h2>
-        <p className="mt-2 text-gray-600">
+        <h2 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">Upload Documents</h2>
+        <p className="mt-2 text-secondary-600 dark:text-secondary-400">
           Add PDFs, Word documents, or text files to your knowledge base
         </p>
       </div>
@@ -191,41 +159,45 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       {/* Upload Area */}
       <div
         {...getRootProps()}
-        className={`relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+        className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
           isDragActive
-            ? 'border-blue-400 bg-blue-50'
+            ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20'
             : selectedFile
-            ? 'border-green-300 bg-green-50'
-            : 'border-gray-300 hover:border-gray-400'
+            ? 'border-success-300 dark:border-success-700 bg-success-50 dark:bg-success-900/20'
+            : 'border-secondary-300 dark:border-secondary-600 hover:border-secondary-400 dark:hover:border-secondary-500 bg-white dark:bg-secondary-800'
         }`}
       >
         <input {...getInputProps()} />
         
         {!selectedFile ? (
           <div className="space-y-4">
-            <Upload className="mx-auto h-12 w-12 text-gray-400" />
+            <div className="mx-auto w-16 h-16 rounded-full bg-secondary-100 dark:bg-secondary-700 flex items-center justify-center">
+              <Upload className="h-8 w-8 text-secondary-400 dark:text-secondary-500" />
+            </div>
             <div>
-              <p className="text-lg font-medium text-gray-900">
+              <p className="text-lg font-medium text-secondary-900 dark:text-secondary-100">
                 {isDragActive ? 'Drop your file here' : 'Drop files here or click to browse'}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-secondary-500 dark:text-secondary-400 mt-1">
                 Supports PDF, DOCX, TXT, MD, PNG, JPG, and JSON files (max 100MB)
               </p>
             </div>
           </div>
         ) : (
           <div className="space-y-4">
-            <File className="mx-auto h-12 w-12 text-green-500" />
+            <div className="mx-auto w-16 h-16 rounded-full bg-success-100 dark:bg-success-900/30 flex items-center justify-center">
+              <File className="h-8 w-8 text-success-500" />
+            </div>
             <div>
-              <p className="text-lg font-medium text-gray-900">{selectedFile.name}</p>
-              <p className="text-sm text-gray-500">{formatFileSize(selectedFile.size)}</p>
+              <p className="text-lg font-medium text-secondary-900 dark:text-secondary-100">{selectedFile.name}</p>
+              <p className="text-sm text-secondary-500 dark:text-secondary-400">{formatFileSize(selectedFile.size)}</p>
             </div>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleRemoveFile();
               }}
-              className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200"
+              className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg text-danger-700 dark:text-danger-400 bg-danger-100 dark:bg-danger-900/30 hover:bg-danger-200 dark:hover:bg-danger-900/50 transition-colors"
             >
               <X className="h-4 w-4 mr-1" />
               Remove
@@ -237,55 +209,52 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       {/* Upload Button */}
       {selectedFile && uploadStatus.status === 'idle' && (
         <div className="text-center">
-          <button
+          <Button
+            variant="primary"
+            size="lg"
             onClick={handleUpload}
-            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            leftIcon={<Upload className="h-5 w-5" />}
           >
-            <Upload className="h-5 w-5 mr-2" />
             Upload and Process
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Status Display */}
       {uploadStatus.status !== 'idle' && (
-        <div className={`rounded-md p-4 ${getStatusColor()}`}>
+        <div className={`rounded-xl p-4 border ${getStatusColor()}`}>
           <div className="flex items-center">
-            {getStatusIcon()}
+            {uploadStatus.status === 'success' && <CheckCircle className="h-5 w-5 text-success-500 flex-shrink-0" />}
+            {uploadStatus.status === 'error' && <AlertCircle className="h-5 w-5 text-danger-500 flex-shrink-0" />}
             <div className="ml-3 flex-1">
               {uploadStatus.status === 'uploading' && (
                 <div>
-                  <p className="font-medium">Uploading file...</p>
-                  <div className="mt-2 w-full bg-white rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${uploadStatus.progress || 0}%` }}
-                    ></div>
-                  </div>
+                  <p className="font-medium text-primary-700 dark:text-primary-300">Uploading file...</p>
+                  <Progress value={uploadStatus.progress || 0} variant="primary" className="mt-2" />
                 </div>
               )}
               
               {uploadStatus.status === 'processing' && (
                 <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                  <p className="font-medium">Processing document and generating embeddings...</p>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-600 border-t-transparent mr-2" />
+                  <p className="font-medium text-primary-700 dark:text-primary-300">Processing document and generating embeddings...</p>
                 </div>
               )}
               
               {uploadStatus.status === 'success' && (
                 <div>
-                  <p className="font-medium">Upload successful!</p>
+                  <p className="font-medium text-success-700 dark:text-success-300">Upload successful!</p>
                   {uploadStatus.message && (
-                    <p className="text-sm mt-1">{uploadStatus.message}</p>
+                    <p className="text-sm mt-1 text-success-600 dark:text-success-400">{uploadStatus.message}</p>
                   )}
                 </div>
               )}
               
               {uploadStatus.status === 'error' && (
                 <div>
-                  <p className="font-medium">Upload failed</p>
+                  <p className="font-medium text-danger-700 dark:text-danger-300">Upload failed</p>
                   {uploadStatus.message && (
-                    <p className="text-sm mt-1">{uploadStatus.message}</p>
+                    <p className="text-sm mt-1 text-danger-600 dark:text-danger-400">{uploadStatus.message}</p>
                   )}
                 </div>
               )}
@@ -295,27 +264,27 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
       )}
 
       {/* Supported Formats */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Supported Formats</h3>
-        <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+      <Card variant="filled" padding="md">
+        <h3 className="text-sm font-medium text-secondary-900 dark:text-secondary-100 mb-3">Supported Formats</h3>
+        <div className="grid grid-cols-2 gap-2 text-sm text-secondary-600 dark:text-secondary-400">
           <div className="flex items-center">
-            <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+            <span className="inline-block w-2 h-2 bg-danger-500 rounded-full mr-2" />
             PDF Documents
           </div>
           <div className="flex items-center">
-            <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+            <span className="inline-block w-2 h-2 bg-primary-500 rounded-full mr-2" />
             Word Documents (.docx)
           </div>
           <div className="flex items-center">
-            <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+            <span className="inline-block w-2 h-2 bg-success-500 rounded-full mr-2" />
             Text Files (.txt)
           </div>
           <div className="flex items-center">
-            <span className="inline-block w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+            <span className="inline-block w-2 h-2 bg-accent-500 rounded-full mr-2" />
             Markdown Files (.md)
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 };

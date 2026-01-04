@@ -5,6 +5,7 @@ import { DatabaseService } from '../services/DatabaseService';
 import { ClaudeService } from '../services/ClaudeService';
 import { ClassificationService } from '../services/ClassificationService';
 import { NerService } from '../services/NerService';
+import { analyticsService } from '../services/AnalyticsService';
 
 export const fileUploadRouter = express.Router();
 
@@ -107,6 +108,17 @@ fileUploadRouter.post('/', async (req, res) => {
     filePath = undefined; // Mark as cleaned up
 
     console.log(`Successfully processed document: ${originalname}`);
+
+    // Track analytics event
+    const sessionId = req.headers['x-session-id'] as string || 'anonymous';
+    await analyticsService.trackEvent('document_upload', sessionId, {
+      documentId: documentRecord.id,
+      documentName: documentRecord.originalName,
+      fileSize: req.file.size,
+      wordCount: documentRecord.wordCount,
+      chunkCount: documentRecord.chunkCount,
+      mimeType: mimetype
+    });
 
     res.json({
       success: true,

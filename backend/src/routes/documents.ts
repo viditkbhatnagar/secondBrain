@@ -1,10 +1,30 @@
 import express from 'express';
 import { DatabaseService } from '../services/DatabaseService';
 import { VectorService } from '../services/VectorService';
+import { cacheStats, invalidateDocumentCaches } from '../middleware/cacheMiddleware';
+import { invalidateAllCaches } from '../utils/cache';
 
 export const documentsRouter = express.Router();
 
-// Get all documents
+/**
+ * @swagger
+ * /documents:
+ *   get:
+ *     summary: Get all documents
+ *     description: Returns a list of all uploaded documents
+ *     tags: [Documents]
+ *     responses:
+ *       200:
+ *         description: List of documents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Document'
+ *       500:
+ *         description: Server error
+ */
 documentsRouter.get('/', async (req, res) => {
   try {
     const documents = await DatabaseService.getAllDocuments();
@@ -18,7 +38,40 @@ documentsRouter.get('/', async (req, res) => {
   }
 });
 
-// Get document chunks by document ID
+/**
+ * @swagger
+ * /documents/{id}/chunks:
+ *   get:
+ *     summary: Get document chunks
+ *     description: Returns all text chunks for a specific document
+ *     tags: [Documents]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Document ID
+ *     responses:
+ *       200:
+ *         description: Document chunks
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 chunks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       content:
+ *                         type: string
+ *                       chunkIndex:
+ *                         type: number
+ *       500:
+ *         description: Server error
+ */
 documentsRouter.get('/:id/chunks', async (req, res) => {
   try {
     const { id } = req.params;
@@ -33,8 +86,24 @@ documentsRouter.get('/:id/chunks', async (req, res) => {
   }
 });
 
-// Get statistics (must be before parameterized routes)
-documentsRouter.get('/stats', async (req, res) => {
+/**
+ * @swagger
+ * /documents/stats:
+ *   get:
+ *     summary: Get document statistics
+ *     description: Returns aggregate statistics about all documents
+ *     tags: [Documents]
+ *     responses:
+ *       200:
+ *         description: Document statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DocumentStats'
+ *       500:
+ *         description: Server error
+ */
+documentsRouter.get('/stats', cacheStats(), async (req, res) => {
   try {
     const stats = await DatabaseService.getStats();
     const vectorCount = await VectorService.getVectorCount();
@@ -57,7 +126,33 @@ documentsRouter.get('/stats', async (req, res) => {
   }
 });
 
-// Get classified groups
+/**
+ * @swagger
+ * /documents/classified:
+ *   get:
+ *     summary: Get classified document groups
+ *     description: Returns documents grouped by classification label
+ *     tags: [Documents]
+ *     responses:
+ *       200:
+ *         description: Classified groups
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 groups:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       label:
+ *                         type: string
+ *                       docs:
+ *                         type: array
+ *       500:
+ *         description: Server error
+ */
 documentsRouter.get('/classified', async (_req, res) => {
   try {
     // Group by top-level classification label
@@ -77,7 +172,41 @@ documentsRouter.get('/classified', async (_req, res) => {
   }
 });
 
-// Entity aggregation endpoint
+/**
+ * @swagger
+ * /documents/entities:
+ *   get:
+ *     summary: Get entity aggregations
+ *     description: Returns aggregated entities extracted from documents
+ *     tags: [Documents]
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Filter by entity type (e.g., PERSON, ORG, PLACE)
+ *     responses:
+ *       200:
+ *         description: Entity aggregations
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 entities:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       type:
+ *                         type: string
+ *                       text:
+ *                         type: string
+ *                       count:
+ *                         type: number
+ *       500:
+ *         description: Server error
+ */
 documentsRouter.get('/entities', async (req, res) => {
   try {
     const type = String(req.query.type || '');
@@ -102,7 +231,44 @@ documentsRouter.get('/entities', async (req, res) => {
   }
 });
 
-// Find documents by entity (and optional classification)
+/**
+ * @swagger
+ * /documents/by-entity:
+ *   get:
+ *     summary: Find documents by entity
+ *     description: Returns documents containing specific entities
+ *     tags: [Documents]
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Entity type
+ *       - in: query
+ *         name: text
+ *         schema:
+ *           type: string
+ *         description: Entity text
+ *       - in: query
+ *         name: classLabel
+ *         schema:
+ *           type: string
+ *         description: Classification label filter
+ *     responses:
+ *       200:
+ *         description: Matching documents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 documents:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Document'
+ *       500:
+ *         description: Server error
+ */
 documentsRouter.get('/by-entity', async (req, res) => {
   try {
     const type = String(req.query.type || '');
@@ -129,7 +295,32 @@ documentsRouter.get('/by-entity', async (req, res) => {
   }
 });
 
-// Get document by ID
+/**
+ * @swagger
+ * /documents/{id}:
+ *   get:
+ *     summary: Get document by ID
+ *     description: Returns a specific document by its ID
+ *     tags: [Documents]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Document ID
+ *     responses:
+ *       200:
+ *         description: Document details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Document'
+ *       404:
+ *         description: Document not found
+ *       500:
+ *         description: Server error
+ */
 documentsRouter.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -149,8 +340,40 @@ documentsRouter.get('/:id', async (req, res) => {
   }
 });
 
-// Delete document
-documentsRouter.delete('/:id', async (req, res) => {
+/**
+ * @swagger
+ * /documents/{id}:
+ *   delete:
+ *     summary: Delete document
+ *     description: Deletes a document and all its associated chunks
+ *     tags: [Documents]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Document ID
+ *     responses:
+ *       200:
+ *         description: Document deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 deletedVectors:
+ *                   type: number
+ *       404:
+ *         description: Document not found
+ *       500:
+ *         description: Server error
+ */
+documentsRouter.delete('/:id', invalidateDocumentCaches, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -165,6 +388,9 @@ documentsRouter.delete('/:id', async (req, res) => {
 
     // Delete from database (document record only)
     await DatabaseService.deleteDocument(id);
+    
+    // Invalidate all caches since document data changed
+    await invalidateAllCaches();
     
     console.log(`Deleted document ${id} and ${deletedVectorCount} associated vectors`);
     

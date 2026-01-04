@@ -16,16 +16,22 @@ export interface StoredVector {
   };
 }
 
+// IMPROVED: Higher thresholds for better precision
+const SIMILARITY_THRESHOLD = 0.45; // Minimum for consideration (was 0.3)
+const HIGH_RELEVANCE_THRESHOLD = 0.65; // Mark as "highly relevant"
+const EXCELLENT_THRESHOLD = 0.80; // Mark as "excellent match"
+const MAX_CHUNKS_PER_DOCUMENT = 2; // Prevent document domination
+
 export class VectorService {
   private static rerankPipeline: any | null = null;
   private static rerankLastUsed: boolean = false;
   private static rerankModelName: string = 'Xenova/ms-marco-MiniLM-L-6-v2';
+
   /**
    * Initialize the vector service with MongoDB
    */
   static async initialize(): Promise<void> {
     console.log('✅ Vector service initialized with MongoDB storage');
-    // Lazy init for reranker (downloading models is expensive); prepare hook
     this.rerankPipeline = null;
   }
 
@@ -41,17 +47,13 @@ export class VectorService {
         throw new Error('No chunks provided to store');
       }
 
-      // Extract text content for embedding generation
       const texts = chunks.map(chunk => chunk.content);
-      
-      // Generate embeddings in batch for efficiency
       const embeddings = await ClaudeService.generateEmbeddings(texts);
 
       if (embeddings.length !== chunks.length) {
         throw new Error(`Embedding count mismatch: expected ${chunks.length}, got ${embeddings.length}`);
       }
 
-      // Prepare documents for batch insert
       const chunkDocuments = chunks.map((chunk, index) => ({
         id: `vector_${chunk.id}`,
         documentId: chunk.documentId,
@@ -66,9 +68,7 @@ export class VectorService {
         createdAt: new Date()
       }));
 
-      // Batch insert into MongoDB
       await DocumentChunkModel.insertMany(chunkDocuments, { ordered: false });
-
       console.log(`✅ Stored ${chunks.length} chunks for document: ${documentName}`);
     } catch (error: any) {
       console.error('Error storing document chunks:', error);
@@ -77,22 +77,19 @@ export class VectorService {
   }
 
   /**
-   * Search for similar chunks using cosine similarity
+   * IMPROVED: Search with higher threshold and deduplication
    */
   static async searchSimilar(
     query: string, 
     limit: number = 5,
-    minSimilarity: number = 0.3
+    minSimilarity: number = SIMILARITY_THRESHOLD
   ): Promise<RelevantChunk[]> {
     try {
       if (!query.trim()) {
         throw new Error('Search query cannot be empty');
       }
 
-      // Generate embedding for the query
       const queryEmbedding = await ClaudeService.generateEmbedding(query);
-
-      // Get all chunks from MongoDB
       const allChunks = await DocumentChunkModel.find({}).exec();
 
       if (allChunks.length === 0) {
@@ -100,12 +97,10 @@ export class VectorService {
         return [];
       }
 
-      // Calculate similarity scores for all chunks
       const similarities: Array<{ chunk: any; similarity: number }> = [];
 
       for (const chunk of allChunks) {
         if (!chunk.embedding || chunk.embedding.length === 0) {
-          console.warn(`Chunk ${chunk.id} has no embedding, skipping`);
           continue;
         }
 
@@ -116,11 +111,13 @@ export class VectorService {
         }
       }
 
-      // Sort by similarity (highest first) and limit results
+      // Sort by similarity
       similarities.sort((a, b) => b.similarity - a.similarity);
-      const topResults = similarities.slice(0, limit);
 
-      // Convert to RelevantChunk format
+      // IMPROVED: Apply deduplication
+      const deduplicated = this.deduplicateResults(similarities);
+      const topResults = deduplicated.slice(0, limit);
+
       const relevantChunks: RelevantChunk[] = topResults.map(result => ({
         content: result.chunk.content,
         documentName: result.chunk.documentName,
@@ -129,7 +126,7 @@ export class VectorService {
         similarity: result.similarity
       }));
 
-      console.log(`🔍 Found ${relevantChunks.length} relevant chunks for query: "${query.substring(0, 50)}..."`);
+      console.log(`🔍 Found ${relevantChunks.length} relevant chunks (from ${similarities.length} candidates)`);
       return relevantChunks;
     } catch (error: any) {
       console.error('Error searching similar chunks:', error);
@@ -137,12 +134,75 @@ export class VectorService {
     }
   }
 
+  /**
+   * IMPROVED: Deduplicate results - max 2 chunks per document, no content overlap
+   */
+  private static deduplicateResults(
+    results: Array<{ chunk: any; similarity: number }>
+  ): Array<{ chunk: any; similarity: number }> {
+    const documentChunkCount = new Map<string, number>();
+    const deduplicated: Array<{ chunk: any; similarity: number }> = [];
+    const seenContent = new Set<string>();
+
+    for (const result of results) {
+      const docId = result.chunk.documentId;
+      const currentCount = documentChunkCount.get(docId) || 0;
+
+      // Skip if we already have max chunks from this document
+      if (currentCount >= MAX_CHUNKS_PER_DOCUMENT) {
+        continue;
+      }
+
+      // Check for content overlap with already selected chunks from same document
+      const contentKey = this.getContentFingerprint(result.chunk.content);
+      if (seenContent.has(contentKey)) {
+        continue;
+      }
+
+      // Check Jaccard similarity with existing chunks from same document
+      const existingFromDoc = deduplicated.filter(d => d.chunk.documentId === docId);
+      const hasOverlap = existingFromDoc.some(existing => 
+        this.calculateJaccardSimilarity(existing.chunk.content, result.chunk.content) > 0.5
+      );
+
+      if (hasOverlap) {
+        continue;
+      }
+
+      deduplicated.push(result);
+      documentChunkCount.set(docId, currentCount + 1);
+      seenContent.add(contentKey);
+    }
+
+    return deduplicated;
+  }
+
+  /**
+   * Calculate Jaccard similarity between two texts
+   */
+  private static calculateJaccardSimilarity(text1: string, text2: string): number {
+    const words1 = new Set(text1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    const words2 = new Set(text2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    const intersection = new Set([...words1].filter(w => words2.has(w)));
+    const union = new Set([...words1, ...words2]);
+    return union.size > 0 ? intersection.size / union.size : 0;
+  }
+
+  /**
+   * Get a fingerprint of content for quick duplicate detection
+   */
+  private static getContentFingerprint(content: string): string {
+    // Use first 100 chars + last 100 chars as fingerprint
+    const normalized = content.toLowerCase().replace(/\s+/g, ' ').trim();
+    return normalized.slice(0, 100) + '|' + normalized.slice(-100);
+  }
+
   /** Search restricted to a set of documentIds */
   static async searchSimilarWithin(
     query: string,
     docIds: string[],
     limit: number = 5,
-    minSimilarity: number = 0.2
+    minSimilarity: number = SIMILARITY_THRESHOLD
   ): Promise<RelevantChunk[]> {
     try {
       if (!query.trim()) throw new Error('Search query cannot be empty');
@@ -151,13 +211,17 @@ export class VectorService {
       const queryEmbedding = await ClaudeService.generateEmbedding(query);
       const allChunks = await DocumentChunkModel.find({ documentId: { $in: docIds } }).exec();
       const similarities: Array<{ chunk: any; similarity: number }> = [];
+      
       for (const chunk of allChunks) {
         if (!chunk.embedding || chunk.embedding.length === 0) continue;
         const sim = this.cosineSimilarity(queryEmbedding, chunk.embedding);
         if (sim >= minSimilarity) similarities.push({ chunk, similarity: sim });
       }
+      
       similarities.sort((a, b) => b.similarity - a.similarity);
-      const top = similarities.slice(0, limit);
+      const deduplicated = this.deduplicateResults(similarities);
+      const top = deduplicated.slice(0, limit);
+      
       return top.map(r => ({
         content: r.chunk.content,
         documentName: r.chunk.documentName,
@@ -172,19 +236,21 @@ export class VectorService {
   }
 
   /**
-   * Hybrid search: combine keyword (BM25-like via Mongo text score) with vector similarity.
-   * We retrieve topN from both, merge by normalized scores, and rerank.
+   * IMPROVED: Hybrid search with better blending and Reciprocal Rank Fusion
    */
   static async searchSimilarHybrid(
     query: string,
     options?: { limit?: number; minSimilarity?: number; textTopK?: number; vectorTopK?: number; alpha?: number; rerank?: boolean }
   ): Promise<RelevantChunk[]> {
     const limit = options?.limit ?? 5;
-    const minSim = options?.minSimilarity ?? 0.2;
-    const textTopK = options?.textTopK ?? Math.max(20, limit * 4);
-    const vectorTopK = options?.vectorTopK ?? Math.max(20, limit * 4);
-    const alpha = options?.alpha ?? 0.5; // blend weight between vector and text
+    const minSim = options?.minSimilarity ?? SIMILARITY_THRESHOLD;
+    const textTopK = options?.textTopK ?? Math.max(30, limit * 6);
+    const vectorTopK = options?.vectorTopK ?? Math.max(30, limit * 6);
     const doRerank = options?.rerank ?? true;
+
+    // Classify query to adjust weights
+    const queryType = this.classifyQuery(query);
+    const { vectorWeight, textWeight } = this.getQueryWeights(queryType);
 
     // 1) Text search results with textScore
     type TextResult = { chunkId: string; content: string; documentName: string; documentId: string; score?: number };
@@ -197,24 +263,15 @@ export class VectorService {
       .limit(textTopK)
       .lean()) as TextResult[];
 
-    // Normalize text scores
-    const maxText = textResults.length > 0 ? (textResults[0].score ?? 1) : 1;
-    const textMap = new Map<string, number>();
-    textResults.forEach((r: TextResult) => textMap.set(r.chunkId, ((r.score ?? 0) / (maxText || 1))));
+    // 2) Vector results
+    const vectorResults = await this.searchSimilar(query, vectorTopK, minSim * 0.8); // Slightly lower threshold for initial retrieval
 
-    // 2) Vector results with cosine similarity
-    const vectorResults = await this.searchSimilar(query, vectorTopK, minSim);
-    const maxVec = Math.max(...vectorResults.map(v => v.similarity), 1);
-    const vecMap = new Map<string, number>();
-    vectorResults.forEach(v => vecMap.set(v.chunkId, v.similarity / maxVec));
+    // 3) Apply Reciprocal Rank Fusion (RRF)
+    const rrfScores = this.reciprocalRankFusion(vectorResults, textResults, vectorWeight, textWeight);
 
-    // 3) Merge keys
-    const ids = new Set<string>([...textMap.keys(), ...vecMap.keys()]);
-
-    // 4) Gather data for ranking
+    // 4) Build chunk map
     const byId = new Map<string, RelevantChunk>();
     vectorResults.forEach(v => byId.set(v.chunkId, v));
-    // For text-only hits, reconstruct minimal chunk info from DB rows
     textResults.forEach((r: TextResult) => {
       if (!byId.has(r.chunkId)) {
         byId.set(r.chunkId, {
@@ -227,54 +284,157 @@ export class VectorService {
       }
     });
 
-    // 5) Blend scores and rerank
-    const blended = Array.from(ids).map(id => {
-      const textScore = textMap.get(id) || 0;
-      const vecScore = vecMap.get(id) || 0;
-      const score = alpha * vecScore + (1 - alpha) * textScore;
-      return { id, score };
-    });
+    // 5) Sort by RRF score and get top candidates
+    const sorted = Array.from(rrfScores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, Math.max(limit * 3, 15))
+      .map(([id, score]) => {
+        const chunk = byId.get(id);
+        if (chunk) {
+          // Update similarity to reflect RRF score (normalized)
+          chunk.similarity = Math.min(score * 2, 1); // Scale RRF to 0-1 range
+        }
+        return chunk;
+      })
+      .filter(Boolean) as RelevantChunk[];
 
-    blended.sort((a, b) => b.score - a.score);
-    let top = blended.slice(0, Math.max(limit * 2, 10)).map(x => byId.get(x.id)!).filter(Boolean);
+    // 6) Apply deduplication
+    const dedupedResults = this.deduplicateChunks(sorted);
 
-    // Optional reranking using cross-encoder if available
-    if (doRerank) {
+    // 7) Optional reranking
+    let finalResults = dedupedResults;
+    if (doRerank && dedupedResults.length > 0) {
       try {
-        const reranked = await this.rerankChunks(query, top);
-        top = reranked.slice(0, limit);
+        const reranked = await this.rerankChunks(query, dedupedResults);
+        finalResults = reranked.slice(0, limit);
+        this.rerankLastUsed = true;
       } catch (err) {
-        // Silent fallback if model unavailable
         this.rerankLastUsed = false;
+        finalResults = dedupedResults.slice(0, limit);
       }
     } else {
       this.rerankLastUsed = false;
+      finalResults = dedupedResults.slice(0, limit);
     }
 
-    return top;
+    // 8) Filter out low-relevance results
+    const filtered = finalResults.filter(r => r.similarity >= minSim);
+    
+    console.log(`🔍 Hybrid search: ${filtered.length} results (query type: ${queryType})`);
+    return filtered;
   }
 
   /**
-   * Cross-encoder reranking using a local transformers pipeline (no external API).
-   * Uses a small MS MARCO model to score (query, chunk) pairs.
+   * Classify query type for dynamic weight adjustment
+   */
+  private static classifyQuery(query: string): string {
+    const patterns: Record<string, RegExp> = {
+      FACTUAL: /^(what|who|when|where|which|how many|how much)/i,
+      EXPLANATORY: /^(why|how|explain|describe)/i,
+      COMPARATIVE: /(compare|difference|versus|vs|better)/i,
+      SUMMARIZATION: /(summarize|summary|overview|main points)/i,
+      SPECIFIC: /["']|specific|exactly|precise/i
+    };
+
+    for (const [type, pattern] of Object.entries(patterns)) {
+      if (pattern.test(query)) return type;
+    }
+    return 'GENERAL';
+  }
+
+  /**
+   * Get retrieval weights based on query type
+   */
+  private static getQueryWeights(queryType: string): { vectorWeight: number; textWeight: number } {
+    switch (queryType) {
+      case 'FACTUAL':
+        return { vectorWeight: 0.5, textWeight: 0.5 };
+      case 'EXPLANATORY':
+        return { vectorWeight: 0.7, textWeight: 0.3 };
+      case 'SPECIFIC':
+        return { vectorWeight: 0.4, textWeight: 0.6 };
+      case 'SUMMARIZATION':
+        return { vectorWeight: 0.6, textWeight: 0.4 };
+      default:
+        return { vectorWeight: 0.55, textWeight: 0.45 };
+    }
+  }
+
+  /**
+   * IMPROVED: Reciprocal Rank Fusion for better result merging
+   */
+  private static reciprocalRankFusion(
+    vectorResults: RelevantChunk[],
+    textResults: Array<{ chunkId: string; score?: number }>,
+    vectorWeight: number = 0.6,
+    textWeight: number = 0.4,
+    k: number = 60
+  ): Map<string, number> {
+    const scores = new Map<string, number>();
+
+    // Vector results RRF
+    vectorResults.forEach((chunk, rank) => {
+      const rrf = vectorWeight / (k + rank + 1);
+      scores.set(chunk.chunkId, (scores.get(chunk.chunkId) || 0) + rrf);
+    });
+
+    // Text results RRF
+    textResults.forEach((result, rank) => {
+      const rrf = textWeight / (k + rank + 1);
+      scores.set(result.chunkId, (scores.get(result.chunkId) || 0) + rrf);
+    });
+
+    return scores;
+  }
+
+  /**
+   * Deduplicate RelevantChunk array
+   */
+  private static deduplicateChunks(chunks: RelevantChunk[]): RelevantChunk[] {
+    const documentChunkCount = new Map<string, number>();
+    const deduplicated: RelevantChunk[] = [];
+
+    for (const chunk of chunks) {
+      const docId = chunk.documentId;
+      const currentCount = documentChunkCount.get(docId) || 0;
+
+      if (currentCount >= MAX_CHUNKS_PER_DOCUMENT) {
+        continue;
+      }
+
+      // Check for content overlap
+      const existingFromDoc = deduplicated.filter(d => d.documentId === docId);
+      const hasOverlap = existingFromDoc.some(existing => 
+        this.calculateJaccardSimilarity(existing.content, chunk.content) > 0.5
+      );
+
+      if (hasOverlap) {
+        continue;
+      }
+
+      deduplicated.push(chunk);
+      documentChunkCount.set(docId, currentCount + 1);
+    }
+
+    return deduplicated;
+  }
+
+  /**
+   * Cross-encoder reranking using a local transformers pipeline
    */
   private static async rerankChunks(query: string, chunks: RelevantChunk[]): Promise<RelevantChunk[]> {
     if (chunks.length === 0) return chunks;
 
-    // Lazy initialize the reranker
     if (!this.rerankPipeline) {
-      // Dynamically import to avoid type issues when not installed
       try {
         const { pipeline } = await import('@xenova/transformers');
         this.rerankPipeline = await pipeline('text-classification', this.rerankModelName);
       } catch (e) {
-        // Fail silently if model cannot load (e.g., no internet or missing package)
         this.rerankLastUsed = false;
         return chunks;
       }
     }
 
-    // Score each chunk
     const scored: Array<{ chunk: RelevantChunk; score: number }> = [];
     for (const c of chunks) {
       try {
@@ -287,8 +447,12 @@ export class VectorService {
     }
 
     scored.sort((a, b) => b.score - a.score);
-    this.rerankLastUsed = true;
-    return scored.map(s => s.chunk);
+    
+    // Update similarity scores based on reranking
+    return scored.map((s, idx) => ({
+      ...s.chunk,
+      similarity: Math.max(s.chunk.similarity, s.score * 0.9) // Blend original and rerank scores
+    }));
   }
 
   static getLastRerankUsed(): boolean { return this.rerankLastUsed; }
@@ -383,14 +547,12 @@ export class VectorService {
     limit: number = 3
   ): Promise<Array<{ documentId: string; documentName: string; avgSimilarity: number }>> {
     try {
-      // Get relevant chunks first
-      const chunks = await this.searchSimilar(query, 20, 0.2); // Get more chunks with lower threshold
+      const chunks = await this.searchSimilar(query, 20, SIMILARITY_THRESHOLD * 0.8);
       
       if (chunks.length === 0) {
         return [];
       }
 
-      // Group by document and calculate average similarity
       const documentSimilarities = new Map<string, { name: string; similarities: number[] }>();
       
       for (const chunk of chunks) {
@@ -405,7 +567,6 @@ export class VectorService {
         }
       }
 
-      // Calculate average similarities and sort
       const results = Array.from(documentSimilarities.entries())
         .map(([documentId, data]) => ({
           documentId,
@@ -476,14 +637,12 @@ export class VectorService {
     const entries = Array.from(embeddings.entries());
     if (entries.length === 0) return [];
 
-    // Initialize centroids from first k docs
     const centroids = entries.slice(0, Math.min(k, entries.length)).map(([, emb]) => emb.slice());
     let assignments: number[] = new Array(entries.length).fill(0);
 
     const distance = (a: number[], b: number[]) => 1 - this.cosineSimilarity(a, b);
 
     for (let iter = 0; iter < maxIter; iter++) {
-      // Assign
       let changed = false;
       for (let i = 0; i < entries.length; i++) {
         const emb = entries[i][1];
@@ -495,7 +654,6 @@ export class VectorService {
         }
         if (assignments[i] !== best) { assignments[i] = best; changed = true; }
       }
-      // Update
       const grouped: number[][][] = centroids.map(() => []);
       for (let i = 0; i < entries.length; i++) {
         grouped[assignments[i]].push(entries[i][1]);
@@ -506,7 +664,6 @@ export class VectorService {
       if (!changed) break;
     }
 
-    // Persist clusterId on documents
     const counts = new Array(centroids.length).fill(0);
     for (let i = 0; i < entries.length; i++) {
       const docId = entries[i][0];
@@ -527,10 +684,8 @@ export class VectorService {
         return false;
       }
 
-      // Generate new embedding for updated content
       const newEmbedding = await ClaudeService.generateEmbedding(newContent);
 
-      // Update the chunk
       await DocumentChunkModel.findOneAndUpdate(
         { chunkId },
         { 
@@ -577,7 +732,7 @@ export class VectorService {
   }
 
   /**
-   * Batch update embeddings for all chunks (useful for model changes)
+   * Batch update embeddings for all chunks
    */
   static async regenerateAllEmbeddings(): Promise<number> {
     try {
@@ -589,7 +744,7 @@ export class VectorService {
       console.log(`🔄 Regenerating embeddings for ${chunks.length} chunks...`);
 
       let updated = 0;
-      const batchSize = 10; // Process in small batches to avoid API rate limits
+      const batchSize = 10;
 
       for (let i = 0; i < chunks.length; i += batchSize) {
         const batch = chunks.slice(i, i + batchSize);
@@ -598,7 +753,6 @@ export class VectorService {
         try {
           const embeddings = await ClaudeService.generateEmbeddings(contents);
           
-          // Update each chunk in the batch
           for (let j = 0; j < batch.length; j++) {
             await DocumentChunkModel.findOneAndUpdate(
               { _id: batch[j]._id },
@@ -608,8 +762,6 @@ export class VectorService {
           }
 
           console.log(`📊 Progress: ${updated}/${chunks.length} chunks updated`);
-          
-          // Small delay to avoid hitting rate limits
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (error) {
           console.error(`Failed to update batch ${i}-${i + batchSize}:`, error);

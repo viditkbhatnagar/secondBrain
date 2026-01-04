@@ -1,11 +1,134 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo, useCallback, memo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { FileText, Trash2, Calendar, Hash, Tag, ChevronDown, ChevronUp } from 'lucide-react';
 import { Document } from '../App';
+import { Card, Badge, EmptyState } from './ui';
 
 interface DocumentLibraryProps {
   documents: Document[];
   onDeleteDocument: (documentId: string) => void;
 }
+
+// Memoized document row component
+const DocumentRow = memo(({ 
+  document, 
+  isExpanded, 
+  onToggleExpand, 
+  onDelete,
+  formatDate,
+  formatWordCount,
+  formatBytes,
+  getFileIcon
+}: {
+  document: Document;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onDelete: () => void;
+  formatDate: (date: string) => string;
+  formatWordCount: (count: number) => string;
+  formatBytes: (bytes?: number) => string;
+  getFileIcon: (filename: string) => React.ReactNode;
+}) => (
+  <div className="border-b border-secondary-200 dark:border-secondary-700 last:border-b-0">
+    <div className="p-4 hover:bg-secondary-50 dark:hover:bg-secondary-800/50 transition-colors">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3 flex-1 min-w-0">
+          {getFileIcon(document.filename)}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-medium text-secondary-900 dark:text-secondary-100 truncate">
+              {document.originalName}
+            </h3>
+            <div className="flex items-center space-x-4 mt-1 text-xs text-secondary-500 dark:text-secondary-400">
+              <div className="flex items-center">
+                <Calendar className="h-3 w-3 mr-1" />
+                {formatDate(document.uploadedAt)}
+              </div>
+              <div className="flex items-center">
+                <Hash className="h-3 w-3 mr-1" />
+                {formatWordCount(document.wordCount)}
+              </div>
+              <div className="flex items-center">
+                <Tag className="h-3 w-3 mr-1" />
+                {document.chunkCount} chunks
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={onToggleExpand}
+            className="p-1 text-secondary-400 dark:text-secondary-500 hover:text-secondary-600 dark:hover:text-secondary-300 rounded transition-colors"
+          >
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1 text-secondary-400 dark:text-secondary-500 hover:text-danger-600 dark:hover:text-danger-400 rounded transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="mt-4 pt-4 border-t border-secondary-100 dark:border-secondary-700">
+          {document.summary && (
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-secondary-900 dark:text-secondary-100 mb-2">Summary</h4>
+              <p className="text-sm text-secondary-700 dark:text-secondary-300 leading-relaxed">
+                {document.summary}
+              </p>
+            </div>
+          )}
+          
+          {document.topics && document.topics.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-secondary-900 dark:text-secondary-100 mb-2">Topics</h4>
+              <div className="flex flex-wrap gap-1">
+                {document.topics.map((topic, index) => (
+                  <Badge key={index} variant="primary" size="sm">
+                    {topic}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="font-medium text-secondary-900 dark:text-secondary-100">Word Count:</span>
+              <div className="text-secondary-600 dark:text-secondary-400">{formatWordCount(document.wordCount)}</div>
+            </div>
+            <div>
+              <span className="font-medium text-secondary-900 dark:text-secondary-100">File Size:</span>
+              <div className="text-secondary-600 dark:text-secondary-400">{formatBytes((document as any).fileSize)}</div>
+            </div>
+            <div>
+              <span className="font-medium text-secondary-900 dark:text-secondary-100">Chunks:</span>
+              <div className="text-secondary-600 dark:text-secondary-400">{document.chunkCount}</div>
+            </div>
+            <div>
+              <span className="font-medium text-secondary-900 dark:text-secondary-100">Uploaded:</span>
+              <div className="text-secondary-600 dark:text-secondary-400">{formatDate(document.uploadedAt)}</div>
+            </div>
+            <div>
+              <span className="font-medium text-secondary-900 dark:text-secondary-100">File ID:</span>
+              <div className="text-secondary-600 dark:text-secondary-400 font-mono text-xs">{document.id}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+));
+
+DocumentRow.displayName = 'DocumentRow';
 
 export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({ 
   documents, 
@@ -14,24 +137,27 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
   const [expandedDocuments, setExpandedDocuments] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'size'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const parentRef = useRef<HTMLDivElement>(null);
 
-  const toggleExpanded = (documentId: string) => {
-    const newExpanded = new Set(expandedDocuments);
-    if (newExpanded.has(documentId)) {
-      newExpanded.delete(documentId);
-    } else {
-      newExpanded.add(documentId);
-    }
-    setExpandedDocuments(newExpanded);
-  };
+  const toggleExpanded = useCallback((documentId: string) => {
+    setExpandedDocuments(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(documentId)) {
+        newExpanded.delete(documentId);
+      } else {
+        newExpanded.add(documentId);
+      }
+      return newExpanded;
+    });
+  }, []);
 
-  const handleDelete = async (documentId: string, documentName: string) => {
+  const handleDelete = useCallback((documentId: string, documentName: string) => {
     if (window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
       onDeleteDocument(documentId);
     }
-  };
+  }, [onDeleteDocument]);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -39,23 +165,23 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
+  }, []);
 
-  const formatWordCount = (wordCount: number) => {
+  const formatWordCount = useCallback((wordCount: number) => {
     if (wordCount < 1000) return `${wordCount} words`;
     if (wordCount < 1000000) return `${(wordCount / 1000).toFixed(1)}K words`;
     return `${(wordCount / 1000000).toFixed(1)}M words`;
-  };
+  }, []);
 
-  const formatBytes = (bytes?: number) => {
+  const formatBytes = useCallback((bytes?: number) => {
     if (!bytes && bytes !== 0) return '—';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
+  }, []);
 
-  const getFileIcon = (filename: string) => {
+  const getFileIcon = useCallback((filename: string) => {
     const extension = filename.split('.').pop()?.toLowerCase();
     const iconClass = "h-5 w-5";
     
@@ -71,32 +197,49 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
       default:
         return <FileText className={`${iconClass} text-gray-400`} />;
     }
-  };
+  }, []);
 
-  const sortedDocuments = [...documents].sort((a, b) => {
-    let aValue, bValue;
-    
-    switch (sortBy) {
-      case 'name':
-        aValue = a.originalName.toLowerCase();
-        bValue = b.originalName.toLowerCase();
-        break;
-      case 'size':
-        aValue = a.wordCount;
-        bValue = b.wordCount;
-        break;
-      case 'date':
-      default:
-        aValue = new Date(a.uploadedAt).getTime();
-        bValue = new Date(b.uploadedAt).getTime();
-        break;
-    }
-    
-    if (sortOrder === 'asc') {
-      return aValue > bValue ? 1 : -1;
-    } else {
-      return aValue < bValue ? 1 : -1;
-    }
+  const sortedDocuments = useMemo(() => {
+    return [...documents].sort((a, b) => {
+      let aValue: string | number, bValue: string | number;
+      
+      switch (sortBy) {
+        case 'name':
+          aValue = a.originalName.toLowerCase();
+          bValue = b.originalName.toLowerCase();
+          break;
+        case 'size':
+          aValue = a.wordCount;
+          bValue = b.wordCount;
+          break;
+        case 'date':
+        default:
+          aValue = new Date(a.uploadedAt).getTime();
+          bValue = new Date(b.uploadedAt).getTime();
+          break;
+      }
+      
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+  }, [documents, sortBy, sortOrder]);
+
+  // Use virtual scrolling for lists > 50 items
+  const useVirtual = sortedDocuments.length > 50;
+  
+  const rowVirtualizer = useVirtualizer({
+    count: sortedDocuments.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: useCallback((index: number) => {
+      // Estimate row height based on whether it's expanded
+      const doc = sortedDocuments[index];
+      return expandedDocuments.has(doc?.id) ? 280 : 80;
+    }, [sortedDocuments, expandedDocuments]),
+    overscan: 5,
+    enabled: useVirtual
   });
 
   return (
@@ -104,19 +247,19 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Document Library</h2>
-          <p className="text-gray-600 mt-1">
+          <h2 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">Document Library</h2>
+          <p className="text-secondary-600 dark:text-secondary-400 mt-1">
             {documents.length} {documents.length === 1 ? 'document' : 'documents'} in your knowledge base
           </p>
         </div>
         
         {/* Sort Controls */}
         <div className="flex items-center space-x-2">
-          <label className="text-sm text-gray-700">Sort by:</label>
+          <label className="text-sm text-secondary-700 dark:text-secondary-300">Sort by:</label>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'date' | 'name' | 'size')}
-            className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-sm border border-secondary-300 dark:border-secondary-600 rounded-md px-2 py-1 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="date">Date</option>
             <option value="name">Name</option>
@@ -124,7 +267,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
           </select>
           <button
             onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-            className="text-sm text-gray-600 hover:text-gray-900"
+            className="text-sm text-secondary-600 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-secondary-100"
           >
             {sortOrder === 'asc' ? '↑' : '↓'}
           </button>
@@ -133,118 +276,71 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
 
       {/* Documents List */}
       {documents.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No documents yet</h3>
-          <p className="text-gray-600">
-            Upload your first document to start building your knowledge base
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
-          {sortedDocuments.map((document) => (
-            <div key={document.id} className="border-b border-gray-200 last:border-b-0">
-              <div className="p-4 hover:bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 flex-1 min-w-0">
-                    {getFileIcon(document.filename)}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-gray-900 truncate">
-                        {document.originalName}
-                      </h3>
-                      <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
-                        <div className="flex items-center">
-                          <Calendar className="h-3 w-3 mr-1" />
-                          {formatDate(document.uploadedAt)}
-                        </div>
-                        <div className="flex items-center">
-                          <Hash className="h-3 w-3 mr-1" />
-                          {formatWordCount(document.wordCount)}
-                        </div>
-                        <div className="flex items-center">
-                          <Tag className="h-3 w-3 mr-1" />
-                          {document.chunkCount} chunks
-                        </div>
-                      </div>
-                    </div>
+        <EmptyState
+          icon={<FileText className="h-12 w-12" />}
+          title="No documents yet"
+          description="Upload your first document to start building your knowledge base"
+        />
+      ) : useVirtual ? (
+        // Virtual scrolling for large lists
+        <Card variant="outlined" padding="none">
+          <div
+            ref={parentRef}
+            className="max-h-[600px] overflow-auto"
+          >
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const document = sortedDocuments[virtualRow.index];
+                return (
+                  <div
+                    key={document.id}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <DocumentRow
+                      document={document}
+                      isExpanded={expandedDocuments.has(document.id)}
+                      onToggleExpand={() => toggleExpanded(document.id)}
+                      onDelete={() => handleDelete(document.id, document.originalName)}
+                      formatDate={formatDate}
+                      formatWordCount={formatWordCount}
+                      formatBytes={formatBytes}
+                      getFileIcon={getFileIcon}
+                    />
                   </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => toggleExpanded(document.id)}
-                      className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                    >
-                      {expandedDocuments.has(document.id) ? (
-                        <ChevronUp className="h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(document.id, document.originalName)}
-                      className="p-1 text-gray-400 hover:text-red-600 rounded"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Expanded Content */}
-                {expandedDocuments.has(document.id) && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    {document.summary && (
-                      <div className="mb-4">
-                        <h4 className="text-sm font-medium text-gray-900 mb-2">Summary</h4>
-                        <p className="text-sm text-gray-700 leading-relaxed">
-                          {document.summary}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {document.topics && document.topics.length > 0 && (
-                      <div className="mb-4">
-                        <h4 className="text-sm font-medium text-gray-900 mb-2">Topics</h4>
-                        <div className="flex flex-wrap gap-1">
-                          {document.topics.map((topic, index) => (
-                            <span
-                              key={index}
-                              className="inline-block px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-md"
-                            >
-                              {topic}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-900">Word Count:</span>
-                        <div className="text-gray-600">{formatWordCount(document.wordCount)}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-900">File Size:</span>
-                        <div className="text-gray-600">{formatBytes((document as any).fileSize)}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-900">Chunks:</span>
-                        <div className="text-gray-600">{document.chunkCount}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-900">Uploaded:</span>
-                        <div className="text-gray-600">{formatDate(document.uploadedAt)}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-900">File ID:</span>
-                        <div className="text-gray-600 font-mono text-xs">{document.id}</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                );
+              })}
             </div>
+          </div>
+        </Card>
+      ) : (
+        // Regular rendering for small lists
+        <Card variant="outlined" padding="none">
+          {sortedDocuments.map((document) => (
+            <DocumentRow
+              key={document.id}
+              document={document}
+              isExpanded={expandedDocuments.has(document.id)}
+              onToggleExpand={() => toggleExpanded(document.id)}
+              onDelete={() => handleDelete(document.id, document.originalName)}
+              formatDate={formatDate}
+              formatWordCount={formatWordCount}
+              formatBytes={formatBytes}
+              getFileIcon={getFileIcon}
+            />
           ))}
-        </div>
+        </Card>
       )}
     </div>
   );
