@@ -23,24 +23,13 @@ export const healthRouter = express.Router();
  *       503:
  *         description: Service is unhealthy
  */
-healthRouter.get('/', async (_req, res) => {
-  try {
-    const health = {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: Math.floor(process.uptime()),
-      version: process.env.npm_package_version || '2.0.0'
-    };
-
-    res.json(health);
-  } catch (error) {
-    logger.error('Health check failed', { error });
-    res.status(503).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: 'Health check failed'
-    });
-  }
+healthRouter.get('/', (_req, res) => {
+  // Fast health check for Render - no async operations
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: Math.floor(process.uptime())
+  });
 });
 
 /**
