@@ -76,8 +76,20 @@ app.use(suspiciousRequestDetector); // Log suspicious requests
 app.use(requestLogger);
 
 // Global rate limiting (skip health checks)
-app.use('/api/', apiLimiter);
-app.use('/api/', speedLimiter);
+app.use('/api/', (req, res, next) => {
+  // Skip rate limiting for health checks (Render needs fast response)
+  if (req.path.startsWith('/health')) {
+    return next();
+  }
+  apiLimiter(req, res, next);
+});
+app.use('/api/', (req, res, next) => {
+  // Skip speed limiting for health checks
+  if (req.path.startsWith('/health')) {
+    return next();
+  }
+  speedLimiter(req, res, next);
+});
 
 // HTTP caching headers for API responses
 app.use((req, res, next) => {
@@ -102,6 +114,11 @@ app.use((req, res, next) => {
   if (req.path.includes('/upload')) {
     req.setTimeout(300000); // 5 minutes
     res.setTimeout(300000); // 5 minutes
+  }
+  // Health checks must respond within 3 seconds (Render timeout is 5s)
+  else if (req.path.startsWith('/api/health')) {
+    req.setTimeout(3000);
+    res.setTimeout(3000);
   }
   next();
 });

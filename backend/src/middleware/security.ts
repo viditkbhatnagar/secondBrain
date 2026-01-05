@@ -6,38 +6,15 @@ import { logger } from '../utils/logger';
 
 /**
  * Helmet security headers configuration
+ * CSP disabled for compatibility with external resources (fonts, Spline 3D, etc.)
  */
 export const helmetConfig = helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: [
-        "'self'",
-        "https://fonts.gstatic.com",
-        "https://r2cdn.perplexity.ai",
-        "data:"
-      ],
-      imgSrc: ["'self'", "data:", "https:", "blob:"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"], // Allow inline scripts and eval for React & Spline 3D
-      connectSrc: [
-        "'self'",
-        "https://api.openai.com",
-        "https://fonts.googleapis.com",
-        "https://prod.spline.design",
-        "https://unpkg.com",
-        "wss:",
-        "ws:"
-      ],
-      frameSrc: ["'none'"],
-      objectSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
-    }
-  },
+  contentSecurityPolicy: false, // Disabled for compatibility
   crossOriginEmbedderPolicy: false, // Required for SSE streaming
   crossOriginResourcePolicy: { policy: "cross-origin" },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 });
+
 
 /**
  * MongoDB query sanitization
