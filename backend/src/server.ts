@@ -110,10 +110,10 @@ app.use((req, res, next) => {
 
 // Add request timeout middleware
 app.use((req, res, next) => {
-  // Set timeout to 5 minutes for file uploads
+  // Set timeout to 15 minutes for file uploads (increased for large documents)
   if (req.path.includes('/upload')) {
-    req.setTimeout(300000); // 5 minutes
-    res.setTimeout(300000); // 5 minutes
+    req.setTimeout(900000); // 15 minutes
+    res.setTimeout(900000); // 15 minutes
   }
   // Health checks must respond within 3 seconds (Render timeout is 5s)
   else if (req.path.startsWith('/api/health')) {

@@ -50,7 +50,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000);
+      const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 minutes
 
       const response = await fetch(API_ENDPOINTS.upload, {
         method: 'POST',
