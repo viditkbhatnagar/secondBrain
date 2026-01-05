@@ -164,8 +164,59 @@ app.get('/api/docs.json', (_req, res) => {
   res.send(swaggerSpec);
 });
 
-// 404 handler for undefined routes
-app.use(notFoundHandler);
+// ========================================
+// SERVE STATIC FRONTEND FILES (Production)
+// ========================================
+if (process.env.NODE_ENV === 'production') {
+  const frontendBuildPath = path.join(__dirname, '../../frontend/build');
+  
+  // Check if frontend build exists
+  if (fs.existsSync(frontendBuildPath)) {
+    logger.info('📦 Serving static frontend from:', frontendBuildPath);
+    
+    // Serve static files with caching
+    app.use(express.static(frontendBuildPath, {
+      maxAge: '1y', // Cache static assets for 1 year
+      etag: true,
+      lastModified: true,
+      setHeaders: (res, filePath) => {
+        // Don't cache HTML files (for new deployments)
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+        // Cache CSS/JS/images aggressively
+        else if (filePath.match(/\.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$/)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      }
+    }));
+
+    // SPA routing: serve index.html for all non-API routes
+    app.get('*', (req, res, next) => {
+      // Skip API routes
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
+      
+      // Serve index.html for all other routes (React Router handles client-side routing)
+      const indexPath = path.join(frontendBuildPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        logger.error('Frontend index.html not found at:', indexPath);
+        res.status(404).json({ error: 'Frontend not built' });
+      }
+    });
+  } else {
+    logger.warn('⚠️  Frontend build not found. Run `npm run build:frontend` first.');
+    logger.warn('   Expected path:', frontendBuildPath);
+  }
+} else {
+  logger.info('🔧 Development mode - frontend should run separately on http://localhost:3000');
+}
+
+// 404 handler for API routes only (after static file handling)
+app.use('/api/*', notFoundHandler);
 
 // Global error handling middleware (must be last)
 app.use(errorHandler);

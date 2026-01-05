@@ -1,71 +1,72 @@
-# Render Blueprint - https://render.com/docs/blueprint-spec
-# Optimized for fast RAG responses
+# Render Blueprint for Unified Single Service Deployment
+# Frontend + Backend served from one web service
 
 services:
-  # Backend API - Optimized for performance
+  # Unified Web Service - Serves both frontend and backend
   - type: web
-    name: secondbrain-backend
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    plan: standard  # Use standard for better performance (more CPU/RAM)
+    name: personal-knowledge-base
+    runtime: node
+    region: oregon  # Choose your preferred region
+    plan: starter  # Upgrade to standard for better performance
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
+    
     envVars:
       - key: NODE_ENV
         value: production
+      
       - key: PORT
         value: 3001
+      
+      # Database
       - key: MONGODB_URI
         sync: false  # Set manually in Render dashboard
+      
+      # AI API Keys
       - key: ANTHROPIC_API_KEY
         sync: false
+      
       - key: OPENAI_API_KEY
         sync: false
+      
       - key: COHERE_API_KEY
-        sync: false  # Optional: for neural reranking
+        sync: false  # Optional: for better reranking
+      
+      # Redis Cache (optional but recommended)
       - key: REDIS_ENABLED
         value: "true"
+      
       - key: REDIS_URL
         fromService:
           type: redis
-          name: secondbrain-redis
+          name: knowledge-base-redis
           property: connectionString
+      
+      # CORS - not needed since frontend and backend are same origin
       - key: CORS_ORIGINS
-        fromService:
-          type: web
-          name: secondbrain-frontend
-          property: host
+        value: "*"
+      
+      # Logging
       - key: LOG_LEVEL
         value: info
+      
+      # Performance
       - key: CACHE_WARMUP_ON_START
         value: "true"
-      # Performance optimizations
+      
       - key: NODE_OPTIONS
         value: "--max-old-space-size=512"
+    
+    # Persistent disk for uploads
     disk:
       name: uploads
-      mountPath: /app/uploads
+      mountPath: /opt/render/project/src/backend/uploads
       sizeGB: 1
 
-  # Frontend - Static site with CDN
-  - type: web
-    name: secondbrain-frontend
-    runtime: docker
-    dockerfilePath: ./frontend/Dockerfile
-    dockerContext: ./frontend
-    plan: starter  # Frontend is lightweight
-    healthCheckPath: /
-    autoDeploy: true
-    envVars:
-      - key: REACT_APP_API_URL
-        fromService:
-          type: web
-          name: secondbrain-backend
-          property: host
-
-  # Redis Cache - Critical for fast responses
+  # Redis Cache - Optional but highly recommended for performance
   - type: redis
-    name: secondbrain-redis
-    plan: starter  # 25MB, sufficient for caching
+    name: knowledge-base-redis
+    plan: starter  # 25MB free tier
     ipAllowList: []  # Only allow internal connections

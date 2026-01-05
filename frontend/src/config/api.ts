@@ -2,11 +2,12 @@
 const getApiBaseUrl = (): string => {
     // Check if we're in production
     if (process.env.NODE_ENV === 'production') {
-      // Use env if provided; otherwise default to Render backend URL
-      return process.env.REACT_APP_API_URL || 'https://knowledge-base-backend-ynyk.onrender.com/api';
+      // Use relative URL when frontend and backend are served from same domain (unified server)
+      // This works because backend serves the frontend in production
+      return process.env.REACT_APP_API_URL || '/api';
     }
     
-    // Development environment
+    // Development environment - point to separate backend server
     return 'http://localhost:3001/api';
   };
   
