@@ -27,7 +27,7 @@ import { keepAlive } from './utils/keepAlive';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { apiLimiter, speedLimiter, uploadLimiter } from './middleware/rateLimiter';
-import { helmetConfig, mongoSanitizeConfig, xssSanitizer, suspiciousRequestDetector } from './middleware/security';
+import { helmetConfig, mongoSanitizeConfig, xssSanitizer, suspiciousRequestDetector, preventHtmlCache } from './middleware/security';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,6 +37,9 @@ app.set('trust proxy', 1);
 
 // Security headers (Helmet) - must be early in middleware chain
 app.use(helmetConfig);
+
+// Prevent HTML caching to ensure fresh CSP headers
+app.use(preventHtmlCache);
 
 // Configure CORS with env overrides for production
 const prodOrigins = process.env.CORS_ORIGINS

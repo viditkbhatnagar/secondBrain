@@ -33,12 +33,28 @@ export const helmetConfig = helmet({
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
-    }
+    },
+    // Prevent CSP from being cached by browsers
+    reportOnly: false,
+    useDefaults: false
   },
   crossOriginEmbedderPolicy: false, // Required for SSE streaming
   crossOriginResourcePolicy: { policy: "cross-origin" },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 });
+
+/**
+ * Middleware to prevent HTML caching (ensures fresh CSP headers)
+ */
+export const preventHtmlCache = (req: Request, res: Response, next: NextFunction) => {
+  // For HTML responses, prevent caching to ensure fresh CSP headers
+  if (req.path === '/' || req.path.endsWith('.html') || !req.path.includes('.')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+};
 
 /**
  * MongoDB query sanitization
@@ -193,5 +209,6 @@ export default {
   sanitizeString,
   sanitizeObject,
   requestSizeValidator,
-  suspiciousRequestDetector
+  suspiciousRequestDetector,
+  preventHtmlCache
 };
