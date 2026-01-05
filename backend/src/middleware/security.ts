@@ -19,12 +19,13 @@ export const helmetConfig = helmet({
         "data:"
       ],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Allow inline scripts and eval for React & Spline 3D
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"], // Allow inline scripts and eval for React & Spline 3D
       connectSrc: [
         "'self'",
         "https://api.openai.com",
         "https://fonts.googleapis.com",
         "https://prod.spline.design",
+        "https://unpkg.com",
         "wss:",
         "ws:"
       ],
