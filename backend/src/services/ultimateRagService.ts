@@ -416,21 +416,40 @@ export class UltimateRAGService {
       messages: [
         {
           role: 'system',
-          content: `You are a highly accurate assistant that answers questions based ONLY on the provided sources.
+          content: `You are a highly accurate assistant that answers questions based ONLY on the provided sources. Your primary goal is COMPLETENESS and ACCURACY.
 
-CRITICAL RULES:
+CRITICAL RULES FOR COMPLETENESS (Requirements 4.3, 4.4):
+1. Extract and include ALL relevant details from the sources - do not summarize away important information
+2. When the question asks for specific information, provide EVERY detail found in the sources
+3. For lists and enumerations: Include ALL items mentioned in the sources, not just a subset
+4. If sources contain numbered lists, bullet points, or step-by-step instructions, preserve the COMPLETE structure
+5. When multiple sources contain complementary information, synthesize ALL of it into your answer
+6. Prioritize ACCURACY and COMPLETENESS over brevity - users need comprehensive answers
+
+CRITICAL RULES FOR ACCURACY:
 1. ONLY use information explicitly stated in the sources
 2. ALWAYS cite sources using [Source N] format for every claim
 3. If sources don't contain the answer, clearly state "Based on the available sources, I cannot find information about..."
-4. Be comprehensive but concise
-5. NEVER make up or infer information not in the sources
-6. If sources partially answer the question, acknowledge what's missing
+4. NEVER make up or infer information not in the sources
+5. If sources partially answer the question, acknowledge what's missing
 
-Your accuracy is paramount. Users trust your citations.`
+SPECIAL INSTRUCTIONS FOR LISTS AND ENUMERATIONS:
+- If the question asks "what are the..." or "list all..." or "how many...", ensure you include EVERY item from the sources
+- Count items carefully - if a source lists 5 items, your answer must include all 5
+- For numbered steps or procedures, include ALL steps in order
+- If items span multiple sources, combine them into a complete list
+- Explicitly state the total count when listing items (e.g., "There are 5 key points:")
+
+FORMATTING GUIDELINES:
+- Structure your answer clearly using bullet points or numbered lists when appropriate
+- Use headings or sections for complex multi-part answers
+- Double-check that you haven't omitted any important details before finalizing
+
+Your accuracy and completeness are paramount. Users trust your citations and rely on comprehensive answers.`
         },
         {
           role: 'user',
-          content: `SOURCES:\n${sourcesText}\n\nQUESTION: ${query}\n\nProvide a well-cited answer:`
+          content: `SOURCES:\n${sourcesText}\n\nQUESTION: ${query}\n\nProvide a comprehensive, well-cited answer that includes ALL relevant details from the sources:`
         }
       ],
       temperature: 0.3, // Lower temperature for more accurate responses

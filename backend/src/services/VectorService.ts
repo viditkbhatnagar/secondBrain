@@ -20,7 +20,8 @@ export interface StoredVector {
 const SIMILARITY_THRESHOLD = 0.45; // Minimum for consideration (was 0.3)
 const HIGH_RELEVANCE_THRESHOLD = 0.65; // Mark as "highly relevant"
 const EXCELLENT_THRESHOLD = 0.80; // Mark as "excellent match"
-const MAX_CHUNKS_PER_DOCUMENT = 2; // Prevent document domination
+const MAX_CHUNKS_PER_DOCUMENT = 4; // Increased from 2 to allow more context per document (Requirements 2.4)
+const INITIAL_RETRIEVAL_CANDIDATES = 10; // Increased from ~6 for better recall (Requirements 2.1)
 
 export class VectorService {
   private static rerankPipeline: any | null = null;
@@ -78,11 +79,13 @@ export class VectorService {
 
   /**
    * IMPROVED: Search with higher threshold and deduplication
+   * Now includes fallback behavior (Requirements 5.5)
    */
   static async searchSimilar(
     query: string, 
     limit: number = 5,
-    minSimilarity: number = SIMILARITY_THRESHOLD
+    minSimilarity: number = SIMILARITY_THRESHOLD,
+    enableFallback: boolean = true
   ): Promise<RelevantChunk[]> {
     try {
       if (!query.trim()) {
@@ -97,7 +100,8 @@ export class VectorService {
         return [];
       }
 
-      const similarities: Array<{ chunk: any; similarity: number }> = [];
+      const allSimilarities: Array<{ chunk: any; similarity: number }> = [];
+      const aboveThreshold: Array<{ chunk: any; similarity: number }> = [];
 
       for (const chunk of allChunks) {
         if (!chunk.embedding || chunk.embedding.length === 0) {
@@ -106,17 +110,36 @@ export class VectorService {
 
         const similarity = this.cosineSimilarity(queryEmbedding, chunk.embedding);
         
+        // Store all results for potential fallback
+        allSimilarities.push({ chunk, similarity });
+        
         if (similarity >= minSimilarity) {
-          similarities.push({ chunk, similarity });
+          aboveThreshold.push({ chunk, similarity });
         }
       }
 
-      // Sort by similarity
-      similarities.sort((a, b) => b.similarity - a.similarity);
+      // Sort both arrays by similarity
+      allSimilarities.sort((a, b) => b.similarity - a.similarity);
+      aboveThreshold.sort((a, b) => b.similarity - a.similarity);
 
       // IMPROVED: Apply deduplication
-      const deduplicated = this.deduplicateResults(similarities);
+      const deduplicated = this.deduplicateResults(aboveThreshold);
       const topResults = deduplicated.slice(0, limit);
+
+      // FALLBACK: If no results meet threshold, return top 3 with low-confidence flag (Requirements 5.5)
+      if (topResults.length === 0 && enableFallback && allSimilarities.length > 0) {
+        const fallbackDeduplicated = this.deduplicateResults(allSimilarities);
+        const fallbackResults: RelevantChunk[] = fallbackDeduplicated.slice(0, 3).map(result => ({
+          content: result.chunk.content,
+          documentName: result.chunk.documentName,
+          documentId: result.chunk.documentId,
+          chunkId: result.chunk.chunkId,
+          similarity: result.similarity,
+          lowConfidence: true
+        }));
+        console.log(`🔍 No results met threshold (${minSimilarity}), returning ${fallbackResults.length} fallback results with low-confidence flag`);
+        return fallbackResults;
+      }
 
       const relevantChunks: RelevantChunk[] = topResults.map(result => ({
         content: result.chunk.content,
@@ -126,7 +149,7 @@ export class VectorService {
         similarity: result.similarity
       }));
 
-      console.log(`🔍 Found ${relevantChunks.length} relevant chunks (from ${similarities.length} candidates)`);
+      console.log(`🔍 Found ${relevantChunks.length} relevant chunks (from ${aboveThreshold.length} candidates)`);
       return relevantChunks;
     } catch (error: any) {
       console.error('Error searching similar chunks:', error);
@@ -237,6 +260,7 @@ export class VectorService {
 
   /**
    * IMPROVED: Hybrid search with better blending and Reciprocal Rank Fusion
+   * Now retrieves at least 10 initial candidates (Requirements 2.1)
    */
   static async searchSimilarHybrid(
     query: string,
@@ -244,8 +268,8 @@ export class VectorService {
   ): Promise<RelevantChunk[]> {
     const limit = options?.limit ?? 5;
     const minSim = options?.minSimilarity ?? SIMILARITY_THRESHOLD;
-    const textTopK = options?.textTopK ?? Math.max(30, limit * 6);
-    const vectorTopK = options?.vectorTopK ?? Math.max(30, limit * 6);
+    const textTopK = options?.textTopK ?? Math.max(30, INITIAL_RETRIEVAL_CANDIDATES * 3);
+    const vectorTopK = options?.vectorTopK ?? Math.max(30, INITIAL_RETRIEVAL_CANDIDATES * 3);
     const doRerank = options?.rerank ?? true;
 
     // Classify query to adjust weights
@@ -317,8 +341,18 @@ export class VectorService {
       finalResults = dedupedResults.slice(0, limit);
     }
 
-    // 8) Filter out low-relevance results
+    // 8) Filter out low-relevance results with fallback (Requirements 5.5)
     const filtered = finalResults.filter(r => r.similarity >= minSim);
+    
+    // FALLBACK: If no results meet threshold, return top 3 with low-confidence flag
+    if (filtered.length === 0 && finalResults.length > 0) {
+      const fallbackResults = finalResults.slice(0, 3).map(r => ({
+        ...r,
+        lowConfidence: true
+      }));
+      console.log(`🔍 Hybrid search: No results met threshold (${minSim}), returning ${fallbackResults.length} fallback results with low-confidence flag`);
+      return fallbackResults;
+    }
     
     console.log(`🔍 Hybrid search: ${filtered.length} results (query type: ${queryType})`);
     return filtered;
@@ -457,6 +491,8 @@ export class VectorService {
 
   static getLastRerankUsed(): boolean { return this.rerankLastUsed; }
   static getRerankModelName(): string { return this.rerankModelName; }
+  static getMaxChunksPerDocument(): number { return MAX_CHUNKS_PER_DOCUMENT; }
+  static getInitialRetrievalCandidates(): number { return INITIAL_RETRIEVAL_CANDIDATES; }
 
   /**
    * Get all documents with their chunk counts
