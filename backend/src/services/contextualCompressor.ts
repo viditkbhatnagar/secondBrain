@@ -73,7 +73,7 @@ export class ContextualCompressor {
 
     try {
       const response = await this.getOpenAI().chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-5',
         messages: [
           {
             role: 'system',
@@ -87,8 +87,8 @@ Return JSON: {"compressed": "relevant text only", "relevanceScore": 0.0-1.0, "ke
             content: `Question: ${query}\n\nContext: ${context.slice(0, 2000)}`
           }
         ],
-        temperature: 0,
-        max_tokens: 500,
+        temperature: 1,
+        max_completion_tokens: 500,
         response_format: { type: 'json_object' }
       });
 

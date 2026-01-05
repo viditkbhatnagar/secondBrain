@@ -80,6 +80,14 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
         message: `Successfully processed ${result.document.wordCount} words in ${result.document.chunkCount} chunks` 
       });
 
+      // Clear all caches to ensure fresh search results
+      try {
+        await fetch(API_ENDPOINTS.blazingCacheInvalidate, { method: 'POST' });
+        console.log('✅ Search cache cleared after document upload');
+      } catch (err) {
+        console.warn('Failed to clear cache:', err);
+      }
+
       onFileUploaded(result.document);
 
       setTimeout(() => {

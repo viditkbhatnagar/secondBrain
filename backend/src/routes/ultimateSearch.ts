@@ -16,7 +16,7 @@ const searchSchema = z.object({
   enableCompression: z.boolean().optional().default(true),
   enableReranking: z.boolean().optional().default(true),
   enableQueryDecomposition: z.boolean().optional().default(true),
-  model: z.enum(['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo-preview']).optional().default('gpt-3.5-turbo')
+  model: z.enum(['gpt-5']).optional().default('gpt-5')
 });
 
 /**
@@ -66,8 +66,8 @@ const searchSchema = z.object({
  *                 default: true
  *               model:
  *                 type: string
- *                 enum: [gpt-3.5-turbo, gpt-4, gpt-4-turbo-preview]
- *                 default: gpt-3.5-turbo
+ *                 enum: [gpt-5]
+ *                 default: gpt-5
  *     responses:
  *       200:
  *         description: Search results with AI answer
@@ -149,7 +149,7 @@ router.get('/ultimate/quick', async (req: Request, res: Response) => {
       enableCompression: false,
       enableReranking: true,
       enableQueryDecomposition: false,
-      model: 'gpt-3.5-turbo'
+      model: 'gpt-5'
     });
 
     res.json(result);

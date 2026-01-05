@@ -80,12 +80,6 @@ export class AIServiceError extends AppError {
   }
 }
 
-export class ClaudeAPIError extends AIServiceError {
-  constructor(message: string = 'Claude API error') {
-    super(message, 'CLAUDE_API_ERROR');
-  }
-}
-
 export class OpenAIAPIError extends AIServiceError {
   constructor(message: string = 'OpenAI API error') {
     super(message, 'OPENAI_API_ERROR');

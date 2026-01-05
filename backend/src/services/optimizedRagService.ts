@@ -55,7 +55,7 @@ export class OptimizedRAGService {
       minConfidence = 0.5,
       useCache = true,
       validateResponse = true,
-      model = 'gpt-3.5-turbo'
+      model = 'gpt-5'
     } = options;
 
     try {
@@ -167,7 +167,7 @@ export class OptimizedRAGService {
     options: RAGOptions = {}
   ): Promise<void> {
     const startTime = Date.now();
-    const { maxSources = 5, minConfidence = 0.5, model = 'gpt-3.5-turbo' } = options;
+    const { maxSources = 5, minConfidence = 0.5, model = 'gpt-5' } = options;
 
     try {
       // Get sources first
@@ -204,8 +204,8 @@ export class OptimizedRAGService {
     const response = await this.getOpenAI().chat.completions.create({
       model,
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 1000
+      temperature: 1,
+      max_completion_tokens: 12000
     });
 
     return response.choices[0]?.message?.content || '';
@@ -213,7 +213,7 @@ export class OptimizedRAGService {
 
   private async generateNoSourcesResponse(query: string): Promise<string> {
     const prompt = promptService.buildNoSourcesPrompt(query);
-    return this.generateResponse(prompt, 'gpt-3.5-turbo');
+    return this.generateResponse(prompt, 'gpt-5');
   }
 
   private async regenerateWithStricterPrompt(
@@ -228,7 +228,7 @@ Question: ${query}
 
 Answer using ONLY the information above. If something isn't mentioned, don't include it:`;
 
-    return this.generateResponse(strictPrompt, 'gpt-3.5-turbo');
+    return this.generateResponse(strictPrompt, 'gpt-5');
   }
 
   private calculateBasicConfidence(sources: any[]): number {

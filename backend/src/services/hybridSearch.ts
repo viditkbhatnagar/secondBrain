@@ -1,4 +1,4 @@
-import { ClaudeService, RelevantChunk } from './ClaudeService';
+import { GptService, RelevantChunk } from './GptService';
 import { DocumentChunkModel } from '../models/index';
 import { logger } from '../utils/logger';
 import { EmbeddingCache } from '../utils/cache';
@@ -144,7 +144,7 @@ export class HybridSearchService {
 
   // Semantic search using vector similarity
   private async semanticSearch(query: string, limit: number): Promise<SearchResult[]> {
-    const embedding = await ClaudeService.generateEmbedding(query);
+    const embedding = await GptService.generateEmbedding(query);
     const allChunks = await DocumentChunkModel.find({}).exec();
 
     if (allChunks.length === 0) return [];
@@ -353,10 +353,10 @@ Return JSON array of scores: [{"index": 0, "score": 8}, ...]`;
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-5',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0,
-      max_tokens: 500
+      temperature: 1,
+      max_completion_tokens: 12000
     });
 
     return response.choices[0]?.message?.content || '[]';

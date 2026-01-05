@@ -70,20 +70,6 @@ const handleMulterError = (error: any): AppError => {
 const handleAPIError = (error: any): AppError => {
   const message = error.message || '';
   
-  // Claude API errors
-  if (message.includes('Claude') || message.includes('Anthropic')) {
-    if (message.includes('rate limit')) {
-      return new AppError('AI service is temporarily rate-limited. Please try again in a few minutes.', 429, 'CLAUDE_RATE_LIMIT');
-    }
-    if (message.includes('authentication') || message.includes('API key')) {
-      return new AppError('AI service authentication failed', 401, 'CLAUDE_AUTH_ERROR');
-    }
-    if (message.includes('credit') || message.includes('quota')) {
-      return new AppError('AI service credits exhausted', 402, 'CLAUDE_CREDITS_ERROR');
-    }
-    return new AppError('AI service error', 502, 'CLAUDE_API_ERROR');
-  }
-  
   // OpenAI API errors
   if (message.includes('OpenAI')) {
     if (message.includes('rate limit')) {

@@ -6,12 +6,18 @@ export interface ChatMessage {
   confidence?: number;
   isStreaming?: boolean;
   createdAt?: string;
+  isGeneralKnowledge?: boolean; // True if response is from OpenAI fallback
 }
 
 export interface SourceInfo {
   documentName: string;
-  relevance: number;
+  relevance?: number; // Legacy field
+  similarity?: number; // New field from blazing search
   snippet?: string;
+  // Additional fields for expanded view
+  chunkId?: string;
+  documentId?: string;
+  content?: string;
 }
 
 export interface ChatThread {

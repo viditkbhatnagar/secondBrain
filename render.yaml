@@ -25,9 +25,6 @@ services:
         sync: false  # Set manually in Render dashboard
       
       # AI API Keys
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      
       - key: OPENAI_API_KEY
         sync: false
       

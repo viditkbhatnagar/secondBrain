@@ -119,117 +119,177 @@ export const ChatPage: React.FC = () => {
 
   const startStream = async (prompt: string, threadId?: string) => {
     setThinkingStage('understanding');
-    let fullAnswer = '';
     let sources: SourceInfo[] = [];
     let confidence = 75;
-    let newThreadId: string | null = null;
     const isFirstMessage = !threadId;
 
     // Progress through thinking stages
     setTimeout(() => setThinkingStage('searching'), 800);
 
-    const params = new URLSearchParams({
-      query: prompt,
-      strategy,
-      rerank: String(rerank),
-    });
-    if (threadId) params.set('threadId', threadId);
-
-    const url = `${API_ENDPOINTS.search}/agent/stream?${params.toString()}`;
-    const es = new EventSource(url);
-
-    es.addEventListener('thread', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      newThreadId = data.threadId;
-      setActiveThreadId(data.threadId);
-      loadThreads();
-      if (isFirstMessage && newThreadId) {
-        setTimeout(() => generateTitle(newThreadId!, prompt), 500);
-      }
-    });
-
-    es.addEventListener('retrieval', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      setFoundCount(data.count || 0);
-      setThinkingStage('found');
-      setTimeout(() => setThinkingStage('composing'), 1000);
-    });
-
-    es.addEventListener('answer', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      fullAnswer += data.partial;
-      setThinkingStage(null);
-
-      // Update or create streaming message
-      setMessages((prev) => {
-        const existing = prev.find((m) => m.isStreaming);
-        if (existing) {
-          return prev.map((m) =>
-            m.isStreaming ? { ...m, content: fullAnswer } : m
-          );
-        } else {
-          return [
-            ...prev,
-            {
-              role: 'assistant',
-              content: fullAnswer,
-              isStreaming: true,
-              sources: [],
-              confidence: 0,
-            },
-          ];
-        }
+    try {
+      // Use the agent stream endpoint that properly persists messages
+      const params = new URLSearchParams({
+        query: prompt,
+        strategy,
+        rerank: String(rerank),
       });
-    });
-
-    es.addEventListener('done', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-
-      // Extract sources from trace
-      sources = extractSources(data.agentTrace);
-
-      // Extract confidence
-      const qualityStep = data.agentTrace?.find(
-        (t: any) => t.step === 'retrieval-quality'
-      );
-      if (qualityStep?.detail?.topSimilarity) {
-        confidence = Math.min(qualityStep.detail.topSimilarity + 10, 99);
+      if (threadId) {
+        params.set('threadId', threadId);
       }
 
-      // Finalize message
+      const response = await fetch(`${API_ENDPOINTS.search}/agent/stream?${params.toString()}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim() || !line.startsWith('event:')) continue;
+
+          const eventMatch = line.match(/event:\s*(\w+)/);
+          const dataMatch = line.match(/data:\s*({.*})/s);
+
+          if (!eventMatch || !dataMatch) continue;
+
+          const event = eventMatch[1];
+          const data = JSON.parse(dataMatch[1]);
+
+          switch (event) {
+            case 'thread':
+              // eslint-disable-next-line no-loop-func
+              setActiveThreadId(data.threadId);
+              if (isFirstMessage && data.threadId) {
+                loadThreads();
+                // eslint-disable-next-line no-loop-func
+                setTimeout(() => generateTitle(data.threadId, prompt), 500);
+              }
+              break;
+
+            case 'step':
+              // Update thinking stages based on step
+              if (data.label?.includes('Searching') || data.label?.includes('stored')) {
+                setThinkingStage('searching');
+              } else if (data.label?.includes('found')) {
+                setThinkingStage('found');
+                setFoundCount(data.count || 0);
+              } else if (data.label?.includes('Generating')) {
+                setThinkingStage('composing');
+              }
+              break;
+
+            case 'retrieval':
+              // Retrieval step - switch to found stage
+              setThinkingStage('found');
+              setFoundCount(data.count || 0);
+              break;
+
+            case 'answer':
+              // Stream the answer (backend sends 'answer' event with 'partial' field)
+              setThinkingStage('composing');
+              setMessages((prev) => {
+                const existing = prev.find((m) => m.isStreaming);
+                if (existing) {
+                  return prev.map((m) =>
+                    m.isStreaming ? { ...m, content: m.content + data.partial } : m
+                  );
+                } else {
+                  return [
+                    ...prev,
+                    {
+                      role: 'assistant',
+                      content: data.partial,
+                      isStreaming: true,
+                      sources: [],
+                      confidence: 0,
+                    },
+                  ];
+                }
+              });
+              break;
+
+            case 'done':
+              // Finalize with sources from agentTrace
+              // eslint-disable-next-line no-loop-func
+              (() => {
+                // Extract sources from agentTrace
+                let finalSources: SourceInfo[] = [];
+                if (data.agentTrace) {
+                  const chunksSummary = data.agentTrace.find((t: any) => t.step === 'chunks-summary');
+                  if (chunksSummary?.detail?.sources) {
+                    finalSources = chunksSummary.detail.sources.map((s: any, index: number) => ({
+                      chunkId: s.chunkId || `chunk-${index}`,
+                      documentName: s.doc || s.documentName || 'Unknown',
+                      documentId: s.documentId || 'unknown',
+                      content: s.content || s.snippet || '',
+                      snippet: (s.content || s.snippet || '').substring(0, 150),
+                      similarity: s.sim || s.similarity || 0.75,
+                    }));
+                  }
+                }
+                
+                // Get confidence and general knowledge flag from metadata
+                const finalConfidence = data.metadata?.confidence || 75;
+                const isGeneralKnowledge = data.metadata?.isGeneralKnowledge || false;
+
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.isStreaming
+                      ? { 
+                          ...m, 
+                          isStreaming: false, 
+                          sources: finalSources, 
+                          confidence: finalConfidence,
+                          isGeneralKnowledge 
+                        }
+                      : m
+                  )
+                );
+                setThinkingStage(null);
+
+                // Reload threads to update sidebar with latest message
+                loadThreads();
+
+                console.log(`🚀 Chat completed`, {
+                  sources: finalSources.length,
+                  confidence: finalConfidence,
+                  isGeneralKnowledge,
+                });
+              })();
+              break;
+
+            case 'error':
+              throw new Error(data.error || 'Unknown error');
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Chat error:', error);
       setMessages((prev) =>
         prev.map((m) =>
-          m.isStreaming ? { ...m, isStreaming: false, sources, confidence } : m
+          m.isStreaming
+            ? { ...m, content: `Error: ${error.message}`, isStreaming: false }
+            : m
         )
       );
       setThinkingStage(null);
-      es.close();
-    });
-
-    es.addEventListener('error', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data);
-        setMessages((prev) => [
-          ...prev.filter((m) => !m.isStreaming),
-          {
-            role: 'assistant',
-            content: `Error: ${data.message}`,
-            sources: [],
-            confidence: 0,
-          },
-        ]);
-        toast.error('Error', data.message);
-      } catch {
-        toast.error('Connection error', 'Failed to get response');
-      }
-      setThinkingStage(null);
-      es.close();
-    });
-
-    es.onerror = () => {
-      setThinkingStage(null);
-      es.close();
-    };
+    }
   };
 
   const handleSend = async () => {

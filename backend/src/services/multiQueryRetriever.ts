@@ -33,7 +33,7 @@ export class MultiQueryRetriever {
 
     try {
       const response = await this.getOpenAI().chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-5',
         messages: [
           {
             role: 'system',
@@ -54,8 +54,8 @@ Return JSON only:
           },
           { role: 'user', content: query }
         ],
-        temperature: 0,
-        max_tokens: 300,
+        temperature: 1,
+        max_completion_tokens: 300,
         response_format: { type: 'json_object' }
       });
 
@@ -97,7 +97,7 @@ Return JSON only:
 
     try {
       const response = await this.getOpenAI().chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-5',
         messages: [
           {
             role: 'system',
@@ -105,8 +105,8 @@ Return JSON only:
           },
           { role: 'user', content: query }
         ],
-        temperature: 0.3,
-        max_tokens: 150
+        temperature: 1,
+        max_completion_tokens: 150
       });
 
       const hypothetical = response.choices[0]?.message?.content || query;
@@ -127,7 +127,7 @@ Return JSON only:
 
     try {
       const response = await this.getOpenAI().chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-5',
         messages: [
           {
             role: 'system',
@@ -135,8 +135,8 @@ Return JSON only:
           },
           { role: 'user', content: query }
         ],
-        temperature: 0.3,
-        max_tokens: 150,
+        temperature: 1,
+        max_completion_tokens: 150,
         response_format: { type: 'json_object' }
       });
 

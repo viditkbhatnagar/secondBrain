@@ -9,9 +9,9 @@ interface StreamConfig {
 }
 
 const DEFAULT_CONFIG: StreamConfig = {
-  model: 'gpt-3.5-turbo',
-  temperature: 0.7,
-  maxTokens: 1000
+  model: 'gpt-5',
+  temperature: 1,
+  maxTokens: 12000
 };
 
 export class FastStreamingService {
@@ -69,7 +69,7 @@ export class FastStreamingService {
           { role: 'user', content: prompt }
         ],
         temperature: cfg.temperature,
-        max_tokens: cfg.maxTokens,
+        max_completion_tokens: cfg.maxTokens,
         stream: true
       });
 
@@ -164,7 +164,7 @@ ANSWER:`;
           { role: 'user', content: userPrompt }
         ],
         temperature: cfg.temperature,
-        max_tokens: cfg.maxTokens,
+        max_completion_tokens: cfg.maxTokens,
         stream: true
       });
 

@@ -2,7 +2,7 @@ import express from 'express';
 import { FileProcessor } from '../services/FileProcessor';
 import { VectorService } from '../services/VectorService';
 import { DatabaseService } from '../services/DatabaseService';
-import { ClaudeService } from '../services/ClaudeService';
+import { GptService } from '../services/GptService';
 import { ClassificationService } from '../services/ClassificationService';
 import { NerService } from '../services/NerService';
 import { analyticsService } from '../services/AnalyticsService';
@@ -66,14 +66,14 @@ fileUploadRouter.post('/', async (req, res) => {
       processedDocument.originalName
     );
 
-    // Generate summary using Claude
-    const summary = await ClaudeService.summarizeDocument(
+    // Generate summary using GPT
+    const summary = await GptService.summarizeDocument(
       processedDocument.content,
       processedDocument.originalName
     );
 
-    // Extract topics using Claude
-    const topics = await ClaudeService.extractTopics(processedDocument.content);
+    // Extract topics using GPT
+    const topics = await GptService.extractTopics(processedDocument.content);
 
     // Classify document (first ~3-4 pages) using heuristic+LLM
     const classification = await ClassificationService.classifyDocument(
@@ -169,26 +169,6 @@ fileUploadRouter.post('/', async (req, res) => {
         error: 'Service Quota Exceeded',
         message: 'The embedding service has exceeded its quota. Please contact the administrator.',
         code: 'OPENAI_QUOTA_ERROR'
-      };
-    }
-    // Claude API errors
-    else if (errorMessage.includes('Claude API authentication')) {
-      errorResponse = {
-        error: 'Configuration Error',
-        message: 'Claude API key is invalid. Please contact the administrator.',
-        code: 'CLAUDE_AUTH_ERROR'
-      };
-    } else if (errorMessage.includes('Claude API rate limit')) {
-      errorResponse = {
-        error: 'Service Temporarily Unavailable',
-        message: 'The AI service is currently rate-limited. Please try again in a few minutes.',
-        code: 'CLAUDE_RATE_LIMIT'
-      };
-    } else if (errorMessage.includes('credit balance too low')) {
-      errorResponse = {
-        error: 'Service Credits Exhausted',
-        message: 'The AI service has insufficient credits. Please contact the administrator to add credits.',
-        code: 'CLAUDE_CREDITS_ERROR'
       };
     }
     // File processing errors

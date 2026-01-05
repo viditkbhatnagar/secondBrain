@@ -17,7 +17,6 @@ export const helmetConfig = helmet({
       scriptSrc: ["'self'"],
       connectSrc: [
         "'self'",
-        "https://api.anthropic.com",
         "https://api.openai.com",
         "wss:",
         "ws:"

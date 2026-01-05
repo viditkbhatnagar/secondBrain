@@ -1,9 +1,10 @@
 import express from 'express';
+import OpenAI from 'openai';
 import { VectorService } from '../services/VectorService';
 import { DatabaseService } from '../services/DatabaseService';
-import { ClaudeService } from '../services/ClaudeService';
 
 export const adminRouter = express.Router();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Run clustering (k-means) over document embeddings
 adminRouter.post('/cluster', async (req, res) => {
@@ -55,14 +56,14 @@ adminRouter.post('/cluster/:id/summary', async (req, res) => {
     const docs = await (DocumentModel as any).find({ clusterId: id }, { originalName: 1, summary: 1 }).limit(50).lean();
     const corpus = docs.map((d: any) => `- ${d.originalName}: ${d.summary || ''}`).join('\n');
     const prompt = `Summarize the common themes/topics of the following documents in 4-6 bullet points.\n${corpus}`;
-    const response = await ClaudeService['anthropic'].messages.create({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 250,
-      temperature: 0.2,
+    const response = await openai.chat.completions.create({
+      model: 'gpt-5',
+      max_completion_tokens: 250,
+      temperature: 1,
       messages: [{ role: 'user', content: prompt }]
     });
-    const text = response.content[0].type === 'text' ? response.content[0].text : '';
-    res.json({ summary: text.trim() });
+    const text = response.choices[0]?.message?.content?.trim() || '';
+    res.json({ summary: text });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to summarize cluster', message: error.message });
   }

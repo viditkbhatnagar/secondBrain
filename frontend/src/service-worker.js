@@ -182,24 +182,41 @@ registerRoute(
   })
 );
 
-// 9. Skip caching for SSE/streaming endpoints - let them pass through
+// 9. Blazing Search - CacheFirst for ultra-fast responses (POST requests)
+registerRoute(
+  ({ url, request }) => url.pathname === '/api/blazing/search' && request.method === 'POST',
+  new CacheFirst({
+    cacheName: 'blazing-search',
+    plugins: [
+      new CacheableResponsePlugin({
+        statuses: [0, 200],
+      }),
+      new ExpirationPlugin({
+        maxEntries: 200, // Cache up to 200 searches
+        maxAgeSeconds: 2 * 60 * 60, // 2 hours
+      }),
+    ],
+  })
+);
+
+// 10. Skip caching for SSE/streaming endpoints - let them pass through
 registerRoute(
   ({ url }) => url.pathname.includes('/stream') || url.pathname.includes('/agent'),
   new NetworkOnly()
 );
 
-// 10. Skip caching for analytics endpoints
+// 11. Skip caching for analytics endpoints
 registerRoute(
   ({ url }) => url.pathname.startsWith('/api/analytics'),
   new NetworkOnly()
 );
 
-// 11. Background Sync for failed uploads
+// 12. Background Sync for failed uploads
 const bgSyncPlugin = new BackgroundSyncPlugin('uploadQueue', {
   maxRetentionTime: 24 * 60,
 });
 
-// 12. Upload endpoint with background sync
+// 13. Upload endpoint with background sync
 registerRoute(
   ({ url }) => url.pathname === '/api/upload',
   new NetworkOnly({

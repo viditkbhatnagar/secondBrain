@@ -1,5 +1,5 @@
 import nlp from 'compromise';
-import { ClaudeService } from './ClaudeService';
+import OpenAI from 'openai';
 import { GraphService } from './GraphService';
 
 export interface Entity {
@@ -11,6 +11,7 @@ export interface Entity {
 }
 
 export class NerService {
+  private static openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   static extractQuick(text: string): Entity[] {
     const entities: Entity[] = [];
     const addMatches = (re: RegExp, type: string) => {
@@ -42,13 +43,13 @@ export class NerService {
 Document: ${documentName}
 Text:\n${excerpt}`;
     try {
-      const response = await ClaudeService['anthropic'].messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 500,
-        temperature: 0,
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-5',
+        max_completion_tokens: 500,
+        temperature: 1,
         messages: [{ role: 'user', content: prompt }]
       });
-      const raw = response.content[0].type === 'text' ? response.content[0].text : '[]';
+      const raw = response.choices[0]?.message?.content || '[]';
       const jsonStart = raw.indexOf('[');
       const jsonEnd = raw.lastIndexOf(']');
       const parsed = JSON.parse(jsonStart >= 0 ? raw.slice(jsonStart, jsonEnd + 1) : '[]');

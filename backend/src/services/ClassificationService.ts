@@ -1,5 +1,5 @@
 import nlp from 'compromise';
-import { ClaudeService } from './ClaudeService';
+import OpenAI from 'openai';
 
 export interface ClassificationResult {
   label: string;
@@ -8,6 +8,7 @@ export interface ClassificationResult {
 }
 
 export class ClassificationService {
+  private static openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   /**
    * Heuristic + LLM-backed zero-shot classifier.
    * Reads first N characters (~first 3-4 pages) and classifies into dynamic labels.
@@ -34,15 +35,14 @@ Document name: ${originalName}
 Excerpt:\n${text}`;
 
     try {
-      const response = await ClaudeService['anthropic'].messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 250,
-        temperature: 0,
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-5',
+        max_completion_tokens: 250,
+        temperature: 1,
         messages: [{ role: 'user', content: prompt }]
       });
-      const raw = response.content[0].type === 'text' ? response.content[0].text : '';
+      const raw = response.choices[0]?.message?.content || '';
       const parsed = JSON.parse(this.extractJson(raw));
-      // Optionally blend heuristic & LLM
       const final: ClassificationResult = {
         label: parsed.label || heur.label,
         confidence: Math.max(Number(parsed.confidence) || 0, heur.confidence),

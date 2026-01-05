@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, User, Copy, Check, RefreshCw, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Bot, User, Copy, Check, RefreshCw, ThumbsUp, ThumbsDown, Sparkles } from 'lucide-react';
 import { ChatMessage } from './types';
 import { SourcesAccordion } from './SourcesAccordion';
 import { formatTime } from './utils';
-import { IconButton, Tooltip } from '../ui';
+import { IconButton, Tooltip, Badge } from '../ui';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -98,6 +98,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               : 'bg-white dark:bg-secondary-800 text-secondary-800 dark:text-secondary-200 rounded-tl-md border border-secondary-200 dark:border-secondary-700'
           }`}
         >
+          {/* General knowledge badge */}
+          {!isUser && message.isGeneralKnowledge && (
+            <div className="mb-2 flex items-center gap-2">
+              <Badge variant="info" size="sm">
+                <Sparkles className="w-3 h-3 mr-1" />
+                General Knowledge
+              </Badge>
+              <span className="text-xs text-secondary-500 dark:text-secondary-400">
+                Not found in your documents
+              </span>
+            </div>
+          )}
+          
           {message.isStreaming ? (
             <StreamingText text={message.content} isStreaming={true} />
           ) : (
@@ -108,7 +121,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
 
         {/* Sources accordion (assistant only) */}
-        {!isUser && !message.isStreaming && message.sources && message.sources.length > 0 && (
+        {!isUser && !message.isStreaming && !message.isGeneralKnowledge && message.sources && message.sources.length > 0 && (
           <SourcesAccordion
             sources={message.sources}
             confidence={message.confidence || 75}

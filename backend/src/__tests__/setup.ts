@@ -22,8 +22,8 @@ afterEach(async () => {
 });
 
 // Mock external services
-jest.mock('../services/ClaudeService', () => ({
-  ClaudeService: {
+jest.mock('../services/GptService', () => ({
+  GptService: {
     initialize: jest.fn(),
     generateEmbedding: jest.fn().mockResolvedValue(new Array(1536).fill(0.1)),
     generateEmbeddings: jest.fn().mockResolvedValue([new Array(1536).fill(0.1)]),
@@ -86,5 +86,4 @@ jest.mock('../utils/logger', () => ({
 
 // Set test environment variables
 process.env.NODE_ENV = 'test';
-process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
 process.env.OPENAI_API_KEY = 'test-openai-key';

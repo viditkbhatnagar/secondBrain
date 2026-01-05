@@ -1,6 +1,6 @@
 import express from 'express';
 import { DatabaseService } from '../services/DatabaseService';
-import { ClaudeService } from '../services/ClaudeService';
+import { GptService } from '../services/GptService';
 import { analyticsService } from '../services/AnalyticsService';
 
 export const chatRouter = express.Router();
@@ -112,7 +112,23 @@ chatRouter.get('/threads/:threadId/messages', async (req, res) => {
   try {
     const { threadId } = req.params;
     const messages = await DatabaseService.getMessages(threadId, 500);
-    res.json({ messages });
+    
+    // Normalize old messages to have proper source structure
+    const normalizedMessages = messages.map((msg: any) => {
+      if (msg.sources && Array.isArray(msg.sources)) {
+        msg.sources = msg.sources.map((source: any, index: number) => ({
+          chunkId: source.chunkId || `chunk-${index}`,
+          documentId: source.documentId || 'unknown',
+          documentName: source.documentName || 'Unknown Document',
+          content: source.content || source.snippet || '',
+          snippet: source.snippet || source.content?.substring(0, 150) || '',
+          similarity: source.similarity || source.relevanceScore || 0.75
+        }));
+      }
+      return msg;
+    });
+    
+    res.json({ messages: normalizedMessages });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to get messages', message: error.message });
   }
@@ -206,7 +222,7 @@ chatRouter.post('/threads/:threadId/generate-title', async (req, res) => {
       return res.status(400).json({ error: 'firstMessage is required' });
     }
     
-    const title = await ClaudeService.generateThreadTitle(firstMessage);
+    const title = await GptService.generateThreadTitle(firstMessage);
     await DatabaseService.updateThreadTitle(threadId, title);
     res.json({ title });
   } catch (error: any) {
