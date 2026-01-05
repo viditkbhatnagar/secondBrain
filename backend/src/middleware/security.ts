@@ -12,12 +12,20 @@ export const helmetConfig = helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      fontSrc: [
+        "'self'",
+        "https://fonts.gstatic.com",
+        "https://r2cdn.perplexity.ai",
+        "data:"
+      ],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"], // Allow inline scripts and eval for React & Spline 3D
       connectSrc: [
         "'self'",
         "https://api.openai.com",
+        "https://fonts.googleapis.com",
+        "https://prod.spline.design",
+        "https://unpkg.com",
         "wss:",
         "ws:"
       ],

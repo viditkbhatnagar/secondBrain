@@ -1,4 +1,4 @@
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 import { Request, Response } from 'express';
 import { logger } from '../utils/logger';
@@ -15,8 +15,17 @@ const createRateLimitResponse = (code: string, message: string) => ({
   }
 });
 
-// IPv6-compliant key generator (uses express-rate-limit helper)
-const keyGenerator = (req: Request): string => ipKeyGenerator(req) || 'unknown';
+// IPv6-compliant key generator - extract IP from request
+const keyGenerator = (req: Request): string => {
+  // Try to get IP from headers (for proxies like Render)
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0];
+    return ips.trim();
+  }
+  // Fall back to socket IP
+  return req.ip || req.socket.remoteAddress || 'unknown';
+};
 
 // Log rate limit hits
 const onLimitReached = (req: Request, _res: Response) => {

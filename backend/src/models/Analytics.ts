@@ -40,6 +40,10 @@ export interface IAnalyticsEvent extends Document {
     wordCount?: number;
     chunkCount?: number;
     mimeType?: string;
+    sourcesCount?: number;
+    blazingSearch?: boolean;
+    isGeneralKnowledge?: boolean;
+    originalConfidence?: number;
   };
   createdAt: Date;
 }
@@ -76,7 +80,11 @@ const AnalyticsEventSchema = new Schema<IAnalyticsEvent>({
     streaming: Boolean,
     cached: Boolean,
     wordCount: Number,
-    chunkCount: Number
+    chunkCount: Number,
+    sourcesCount: Number,
+    blazingSearch: Boolean,
+    isGeneralKnowledge: Boolean,
+    originalConfidence: Number
   }
 }, {
   timestamps: true
