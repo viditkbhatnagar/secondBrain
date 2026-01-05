@@ -24,8 +24,9 @@ export const helmetConfig = helmet({
         "'self'",
         "https://api.openai.com",
         "https://fonts.googleapis.com",
+        "https://fonts.gstatic.com", // Service worker fetches font files
         "https://prod.spline.design",
-        "https://unpkg.com",
+        "https://unpkg.com", // Spline WASM files
         "wss:",
         "ws:"
       ],
