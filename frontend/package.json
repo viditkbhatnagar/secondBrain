@@ -39,7 +39,7 @@
     },
     "scripts": {
         "start": "craco start",
-        "build": "craco build",
+        "build": "NODE_OPTIONS='--max-old-space-size=4096' craco build",
         "test": "craco test",
         "eject": "react-scripts eject",
         "analyze": "npm run build && npx source-map-explorer 'build/static/js/*.js'",
