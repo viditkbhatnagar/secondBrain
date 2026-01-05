@@ -12,12 +12,19 @@ export const helmetConfig = helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      fontSrc: [
+        "'self'",
+        "https://fonts.gstatic.com",
+        "https://r2cdn.perplexity.ai",
+        "data:"
+      ],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts for React
       connectSrc: [
         "'self'",
         "https://api.openai.com",
+        "https://fonts.googleapis.com",
+        "https://prod.spline.design",
         "wss:",
         "ws:"
       ],
