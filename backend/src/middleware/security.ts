@@ -6,55 +6,15 @@ import { logger } from '../utils/logger';
 
 /**
  * Helmet security headers configuration
+ * CSP disabled for compatibility with external resources (fonts, Spline 3D, etc.)
  */
 export const helmetConfig = helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: [
-        "'self'",
-        "https://fonts.gstatic.com",
-        "https://r2cdn.perplexity.ai",
-        "data:"
-      ],
-      imgSrc: ["'self'", "data:", "https:", "blob:"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"], // Allow inline scripts and eval for React & Spline 3D
-      connectSrc: [
-        "'self'",
-        "https://api.openai.com",
-        "https://fonts.googleapis.com",
-        "https://fonts.gstatic.com", // Service worker fetches font files
-        "https://prod.spline.design",
-        "https://unpkg.com", // Spline WASM files
-        "wss:",
-        "ws:"
-      ],
-      frameSrc: ["'none'"],
-      objectSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
-    },
-    // Prevent CSP from being cached by browsers
-    reportOnly: false,
-    useDefaults: false
-  },
+  contentSecurityPolicy: false, // Disabled for compatibility
   crossOriginEmbedderPolicy: false, // Required for SSE streaming
   crossOriginResourcePolicy: { policy: "cross-origin" },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 });
 
-/**
- * Middleware to prevent HTML caching (ensures fresh CSP headers)
- */
-export const preventHtmlCache = (req: Request, res: Response, next: NextFunction) => {
-  // For HTML responses, prevent caching to ensure fresh CSP headers
-  if (req.path === '/' || req.path.endsWith('.html') || !req.path.includes('.')) {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
-  next();
-};
 
 /**
  * MongoDB query sanitization
@@ -209,6 +169,5 @@ export default {
   sanitizeString,
   sanitizeObject,
   requestSizeValidator,
-  suspiciousRequestDetector,
-  preventHtmlCache
+  suspiciousRequestDetector
 };
