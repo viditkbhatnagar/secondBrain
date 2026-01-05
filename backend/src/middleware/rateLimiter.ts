@@ -16,7 +16,7 @@ const createRateLimitResponse = (code: string, message: string) => ({
 });
 
 // IPv6-compliant key generator (uses express-rate-limit helper)
-const keyGenerator = (req: Request): string => ipKeyGenerator(req) || 'unknown';
+const keyGenerator = (req: Request): string => (ipKeyGenerator(req) as string) || 'unknown';
 
 // Log rate limit hits
 const onLimitReached = (req: Request, _res: Response) => {
