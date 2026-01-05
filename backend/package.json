@@ -7,11 +7,15 @@
         "start": "node dist/server.js",
         "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
         "build": "npm install --production=false && tsc",
+        "build:production": "npm run build:frontend && npm run build",
+        "build:frontend": "cd ../frontend && npm install && npm run build",
         "postbuild": "mkdir -p dist/uploads",
         "test": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
-        "test:ci": "jest --ci --coverage --reporters=default"
+        "test:ci": "jest --ci --coverage --reporters=default",
+        "db:flush": "ts-node scripts/flush-database.ts",
+        "db:reset": "npm run db:flush"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.27.0",

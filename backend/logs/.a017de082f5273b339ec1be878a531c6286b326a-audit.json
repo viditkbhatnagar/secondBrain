@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/Users/viditkbhatnagar/codes/personal-knowledge-base/backend/logs/.a017de082f5273b339ec1be878a531c6286b326a-audit.json",
+    "files": [
+        {
+            "date": 1767608874563,
+            "name": "/Users/viditkbhatnagar/codes/personal-knowledge-base/backend/logs/app-2026-01-05.log",
+            "hash": "5ccd2cefd567be33319b2fdbb2f46f8cf0e906c8107b5f397c53ea881acd7031"
+        }
+    ],
+    "hashType": "sha256"
+}
