@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { Document } from '../App';
 import { API_ENDPOINTS } from '../config/api';
-import { Button, Card, Progress } from './ui';
+import { Button, Card } from './ui';
 
 interface FileUploadProps {
   onFileUploaded: (document: Document) => void;
@@ -12,7 +12,6 @@ interface FileUploadProps {
 interface UploadStatus {
   status: 'idle' | 'uploading' | 'processing' | 'success' | 'error';
   message?: string;
-  progress?: number;
 }
 
 export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
@@ -44,7 +43,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
   const handleUpload = async () => {
     if (!selectedFile) return;
 
-    setUploadStatus({ status: 'uploading', progress: 0 });
+    setUploadStatus({ status: 'uploading' });
 
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -236,9 +235,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
             {uploadStatus.status === 'error' && <AlertCircle className="h-5 w-5 text-danger-500 flex-shrink-0" />}
             <div className="ml-3 flex-1">
               {uploadStatus.status === 'uploading' && (
-                <div>
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-600 border-t-transparent mr-2" />
                   <p className="font-medium text-primary-700 dark:text-primary-300">Uploading file...</p>
-                  <Progress value={uploadStatus.progress || 0} variant="primary" className="mt-2" />
                 </div>
               )}
               

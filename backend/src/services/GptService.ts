@@ -406,25 +406,79 @@ Return ONLY a JSON array of 3 strings (questions), no explanation or markdown:`;
       throw new Error('Document content cannot be empty for topic extraction');
     }
 
-    const prompt = `Analyze the following text and extract 5-10 key topics or tags that best represent the content. Return only the topics as a comma-separated list:
+    // Use more content (up to 5000 chars) for better topic extraction
+    const contentSample = content.substring(0, 5000);
+    
+    const prompt = `Analyze the following text and extract 8-15 key topics, themes, or tags that best represent the content. These should include:
+- Main subjects and themes
+- Key concepts and terminology
+- Areas of focus
+- Relevant categories
 
-${content.substring(0, 2000)}${content.length > 2000 ? '...' : ''}
+Return ONLY the topics as a comma-separated list (no numbering, no bullet points, just: topic1, topic2, topic3):
+
+${contentSample}${content.length > 5000 ? '...' : ''}
 
 Topics:`;
 
-    const response = await this.client().chat.completions.create({
-      model: this.model,
-      max_completion_tokens: 100,
-      temperature: 1,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    try {
+      const response = await this.client().chat.completions.create({
+        model: this.model,
+        max_completion_tokens: 500, // Increased from 150 for more comprehensive extraction
+        // Note: gpt-5 only supports default temperature (1)
+        messages: [{ role: 'user', content: prompt }],
+      });
 
-    const topicsText = response.choices[0]?.message?.content || '';
-    const topics = topicsText.split(',').map(topic => topic.trim()).filter(topic => topic.length > 0);
-    if (topics.length === 0) {
-      throw new Error('No valid topics extracted from document');
+      const topicsText = response.choices[0]?.message?.content || '';
+      console.log('[DEBUG] Raw topics response:', topicsText);
+
+      if (!topicsText.trim()) {
+        console.warn('[WARN] Empty topics response from GPT');
+        return ['general', 'document'];
+      }
+
+      // Try to parse comma-separated first
+      let topics = topicsText
+        .split(',')
+        .map(topic => topic.trim())
+        .filter(topic => topic.length > 0);
+
+      // If no comma-separated topics found, try splitting by newlines (handles numbered/bulleted lists)
+      if (topics.length === 0) {
+        topics = topicsText
+          .split('\n')
+          .map(line => line.replace(/^[\d\.\-\*\)\]]+\s*/, '').trim()) // Remove numbering/bullets
+          .filter(topic => topic.length > 0 && topic.length < 100); // Filter out empty and too long lines
+      }
+
+      // If still no topics, try to extract words
+      if (topics.length === 0) {
+        topics = topicsText
+          .replace(/[^\w\s,]/g, ' ')
+          .split(/\s+/)
+          .filter(word => word.length > 3)
+          .slice(0, 10);
+      }
+
+      // Final fallback
+      if (topics.length === 0) {
+        console.warn('[WARN] Could not extract any topics, using defaults');
+        return ['general', 'document'];
+      }
+
+      // Limit to 15 topics and ensure they're reasonable length
+      const validTopics = topics
+        .slice(0, 15)
+        .map(topic => topic.substring(0, 50))
+        .filter(topic => topic.length > 0);
+
+      console.log('[INFO] Extracted topics:', validTopics);
+      return validTopics;
+    } catch (error) {
+      console.error('[ERROR] Topic extraction failed:', error);
+      // Return default topics instead of throwing
+      return ['general', 'document'];
     }
-    return topics;
   }
 
   /**
