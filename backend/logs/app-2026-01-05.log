@@ -268,3 +268,49 @@
 {"contentLength":"322","duration":"160ms","level":"info","message":"Request completed","method":"GET","path":"/threads","requestId":"5cad25d4-b661-4830-b852-4081ea4e5056","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-05 15:00:11","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0."}
 {"contentLength":"322","duration":"158ms","level":"info","message":"Request completed","method":"GET","path":"/threads","requestId":"9f3a1e74-eae6-4f14-b17a-0f7f879dccfb","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-05 15:00:11","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0."}
 {"duration":"161ms","level":"info","message":"Request completed","method":"GET","path":"/threads/thread_1767610048276_hczl7ps/messages","requestId":"0c8f9bdc-4716-4b8b-8d5a-ceda52f53f8a","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-05 15:00:13","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0."}
+{"level":"info","message":"⚠️ Cohere API key not found - using fallback reranker","service":"knowledge-base","timestamp":"2026-01-05 15:05:49"}
+{"level":"info","message":"🔧 Development mode - frontend should run separately on http://localhost:3000","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"level":"info","message":"🚀 Starting Personal Knowledge Base Server...","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"error":"","level":"error","message":"Redis error:","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"level":"warn","message":"Redis connection closed","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"error":"Connection is closed.","level":"warn","message":"Redis connection failed, using fallback:","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"level":"info","message":"⚠️ Redis not available - using in-memory cache","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"level":"info","message":"✅ Claude service initialized","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"error":"","level":"error","message":"Redis error:","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"level":"warn","message":"Redis connection closed","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"error":"","level":"error","message":"Redis error:","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"level":"warn","message":"Redis connection closed","service":"knowledge-base","timestamp":"2026-01-05 15:05:51"}
+{"error":"","level":"error","message":"Redis error:","service":"knowledge-base","timestamp":"2026-01-05 15:05:52"}
+{"level":"warn","message":"Redis connection closed","service":"knowledge-base","timestamp":"2026-01-05 15:05:52"}
+{"level":"info","message":"✅ Database service initialized","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"✅ Vector service initialized","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"🌟 Server running on port 3001","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"📋 Health check: http://localhost:3001/api/health","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"📋 Detailed health: http://localhost:3001/api/health/detailed","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"🔍 API endpoints:","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"   📤 Upload: POST /api/upload","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"   🔎 Search: POST /api/search","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"   🚀 Ultimate Search: POST /api/search/ultimate","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"   📁 Documents: GET /api/documents","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"   📊 Stats: GET /api/documents/stats","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"🎉 Personal Knowledge Base is ready!","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"error":"","level":"error","message":"Redis error:","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"warn","message":"Redis connection closed","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"level":"info","message":"✅ MongoDB Atlas Vector Search available","service":"knowledge-base","timestamp":"2026-01-05 15:05:53"}
+{"error":"","level":"error","message":"Redis error:","service":"knowledge-base","timestamp":"2026-01-05 15:05:54"}
+{"level":"warn","message":"Redis max connection attempts reached, giving up","service":"knowledge-base","timestamp":"2026-01-05 15:05:54"}
+{"level":"warn","message":"Redis connection closed","service":"knowledge-base","timestamp":"2026-01-05 15:05:54"}
+{"level":"info","message":"🔥 Starting background cache warmup...","service":"knowledge-base","timestamp":"2026-01-05 15:05:58"}
+{"level":"info","message":"🔥 Starting cache warmup...","service":"knowledge-base","timestamp":"2026-01-05 15:05:58"}
+{"level":"info","message":"Generated 50 embeddings in 2010ms","service":"knowledge-base","timestamp":"2026-01-05 15:06:00"}
+{"level":"info","message":"Generated 50 embeddings in 1446ms","service":"knowledge-base","timestamp":"2026-01-05 15:06:02"}
+{"level":"info","message":"Generated 33 embeddings in 1764ms","service":"knowledge-base","timestamp":"2026-01-05 15:06:04"}
+{"level":"info","message":"Warmed 133 embeddings in 5891ms","service":"knowledge-base","timestamp":"2026-01-05 15:06:04"}
+{"level":"info","message":"Generated 1 embeddings in 621ms","service":"knowledge-base","timestamp":"2026-01-05 15:06:04"}
+{"level":"info","message":"Warmed 1 common queries in 781ms","service":"knowledge-base","timestamp":"2026-01-05 15:06:04"}
+{"level":"info","message":"Warmed stats for 2 documents","service":"knowledge-base","timestamp":"2026-01-05 15:06:04"}
+{"level":"info","message":"✅ Cache warmup completed in 6837ms","service":"knowledge-base","timestamp":"2026-01-05 15:06:04"}
+{"duration":"661ms","level":"info","message":"Request completed","method":"GET","path":"/","requestId":"d7dcec18-b4c7-4dfb-acb9-00ff4764d8c3","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-05 15:06:33","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"duration":"710ms","level":"info","message":"Request completed","method":"GET","path":"/","requestId":"b1be8c14-d14c-44dc-acbf-fb3866419dd3","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-05 15:06:33","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"contentLength":"633","duration":"1675ms","level":"info","message":"Request completed","method":"GET","path":"/stats","requestId":"23f224d9-48e6-492a-8445-775a43dec99b","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-05 15:06:34","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}
+{"contentLength":"567","duration":"1736ms","level":"info","message":"Request completed","method":"GET","path":"/stats","requestId":"6054864c-3871-4683-82a3-2e25d6c6be0a","service":"knowledge-base","statusCode":200,"timestamp":"2026-01-05 15:06:34","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Sa"}

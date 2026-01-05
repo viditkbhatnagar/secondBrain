@@ -4,6 +4,7 @@ import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { ClassificationService } from './ClassificationService';
+import { EnhancedChunker, ChunkConfig, EnhancedChunk } from './enhancedChunker';
 import { exec as execCb } from 'node:child_process';
 import { promisify } from 'node:util';
 const exec = promisify(execCb);
@@ -35,12 +36,28 @@ export interface DocumentChunk {
   sectionTitle?: string;
   hasHeader?: boolean;
   totalChunks?: number;
+  // New overlap tracking fields
+  overlapWithPrevious?: string;
+  overlapWithNext?: string;
 }
 
 export class FileProcessor {
-  // IMPROVED: Smaller chunks for better semantic coherence
+  // Enhanced chunking configuration (400-600 chars for better semantic coherence)
+  private static readonly CHUNK_CONFIG: Partial<ChunkConfig> = {
+    targetSize: 500,
+    minSize: 400,
+    maxSize: 600,
+    overlapSize: 125,
+    preserveSentences: true,
+    preserveParagraphs: true,
+  };
+
+  // Legacy config for fallback
   private static readonly CHUNK_SIZE_CHARS = 800; // ~400-500 tokens (was 1500)
   private static readonly CHUNK_OVERLAP_CHARS = 150; // Better context preservation (was 200)
+
+  // Enhanced chunker instance
+  private static enhancedChunker = new EnhancedChunker(FileProcessor.CHUNK_CONFIG);
 
   /**
    * Process uploaded file and extract text content
@@ -243,8 +260,40 @@ export class FileProcessor {
 
   /**
    * IMPROVED: Split content into smaller, semantically coherent chunks
+   * Uses EnhancedChunker for better sentence boundary detection and overlap tracking
    */
   private static async createSemanticChunks(documentId: string, content: string): Promise<DocumentChunk[]> {
+    // Use enhanced chunker for improved semantic coherence
+    const enhancedChunks = await this.enhancedChunker.chunkDocument(
+      content,
+      documentId,
+      documentId // documentName not critical here
+    );
+
+    // Convert EnhancedChunk to DocumentChunk format
+    const chunks: DocumentChunk[] = enhancedChunks.map((ec) => ({
+      id: ec.id,
+      documentId: ec.documentId,
+      content: ec.content,
+      chunkIndex: ec.chunkIndex,
+      startPosition: ec.startPosition,
+      endPosition: ec.endPosition,
+      wordCount: ec.wordCount,
+      sectionTitle: ec.sectionTitle,
+      hasHeader: ec.hasHeader,
+      totalChunks: ec.totalChunks,
+      overlapWithPrevious: ec.overlapWithPrevious,
+      overlapWithNext: ec.overlapWithNext,
+    }));
+
+    console.log(`📄 Created ${chunks.length} chunks (avg ${Math.round(content.length / Math.max(chunks.length, 1))} chars each)`);
+    return chunks;
+  }
+
+  /**
+   * Legacy chunking method using LangChain splitter (kept for fallback)
+   */
+  private static async createLegacyChunks(documentId: string, content: string): Promise<DocumentChunk[]> {
     // Use sentence-aware splitting with smaller chunks
     const splitter = new RecursiveCharacterTextSplitter({
       chunkSize: this.CHUNK_SIZE_CHARS,

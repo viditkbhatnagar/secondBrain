@@ -7,6 +7,17 @@ import { OpenAIService } from './OpenAIService';
 
 type RetrievalStrategy = 'hybrid' | 'vector';
 
+// Query type classification for adaptive retrieval
+export type QueryType = 'FACTUAL' | 'EXPLANATORY' | 'SUMMARIZATION' | 'SPECIFIC' | 'GENERAL' | 'COMPARATIVE';
+
+// Query analysis result interface
+export interface QueryAnalysis {
+  type: QueryType;
+  documentReference?: { documentId: string; documentName: string };
+  keyTerms: string[];
+  isFollowUp: boolean;
+}
+
 export interface AgentAnswer {
   answer: string;
   relevantChunks: RelevantChunk[];
@@ -16,13 +27,29 @@ export interface AgentAnswer {
   metadata: { strategy: RetrievalStrategy; rerankUsed: boolean; rerankModel: string; askedClarifying?: string; queryExpanded?: boolean; isGeneralKnowledge?: boolean };
 }
 
-// Retrieval configuration based on query type
+// Retrieval configuration based on query type - IMPROVED with adaptive thresholds
 interface RetrievalConfig {
   topK: number;
   threshold: number;
   strategy: RetrievalStrategy;
   useQueryExpansion: boolean;
 }
+
+// Adaptive threshold map per query type (Requirements 2.2)
+const ADAPTIVE_THRESHOLDS: Record<QueryType, number> = {
+  FACTUAL: 0.50,
+  EXPLANATORY: 0.40,
+  SUMMARIZATION: 0.35,
+  SPECIFIC: 0.55,
+  GENERAL: 0.45,
+  COMPARATIVE: 0.45
+};
+
+// Document reference threshold (Requirements 2.3)
+const DOCUMENT_REFERENCE_THRESHOLD = 0.30;
+
+// Low confidence threshold for query expansion (Requirements 2.5)
+const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 export class AgentService {
   /**
@@ -119,40 +146,93 @@ export class AgentService {
   }
 
   /**
-   * Classify query type for optimized retrieval
+   * IMPROVED: Classify query type for optimized retrieval (Requirements 2.2)
+   * Returns a QueryType enum value for adaptive threshold selection
    */
-  private static classifyQuery(query: string): string {
-    const patterns: Record<string, RegExp> = {
-      FACTUAL: /^(what|who|when|where|which|how many|how much)/i,
-      EXPLANATORY: /^(why|how|explain|describe)/i,
-      COMPARATIVE: /(compare|difference|versus|vs|better)/i,
-      SUMMARIZATION: /(summarize|summary|overview|main points)/i,
-      SPECIFIC: /["']|specific|exactly|precise/i
+  static classifyQuery(query: string): QueryType {
+    const patterns: Record<QueryType, RegExp> = {
+      FACTUAL: /^(what|who|when|where|which|how many|how much|is there|are there|does|do|did|was|were|has|have|had)/i,
+      EXPLANATORY: /^(why|how|explain|describe|elaborate|tell me about|what causes|what makes)/i,
+      COMPARATIVE: /(compare|comparison|difference|differences|versus|vs\.?|better|worse|similar|unlike|between)/i,
+      SUMMARIZATION: /(summarize|summary|overview|main points|key points|brief|outline|recap|highlights)/i,
+      SPECIFIC: /["']|specific|exactly|precise|particular|exact|detailed|in detail/i,
+      GENERAL: /.*/ // Default fallback
     };
 
-    for (const [type, pattern] of Object.entries(patterns)) {
-      if (pattern.test(query)) return type;
+    // Check patterns in order of specificity
+    const orderedTypes: QueryType[] = ['SPECIFIC', 'COMPARATIVE', 'SUMMARIZATION', 'FACTUAL', 'EXPLANATORY', 'GENERAL'];
+    
+    for (const type of orderedTypes) {
+      if (type === 'GENERAL') continue; // Skip general, it's the fallback
+      if (patterns[type].test(query)) return type;
     }
     return 'GENERAL';
   }
 
   /**
-   * Get retrieval configuration based on query type
+   * NEW: Get adaptive threshold based on query type (Requirements 2.2)
    */
-  private static getRetrievalConfig(queryType: string): RetrievalConfig {
+  static getAdaptiveThreshold(queryType: QueryType, hasDocumentReference: boolean): number {
+    if (hasDocumentReference) {
+      return DOCUMENT_REFERENCE_THRESHOLD; // 0.30 for document-referenced queries
+    }
+    return ADAPTIVE_THRESHOLDS[queryType];
+  }
+
+  /**
+   * NEW: Analyze query comprehensively (Requirements 2.2, 2.3)
+   * Returns query type, document reference, key terms, and follow-up status
+   */
+  static async analyzeQuery(
+    query: string,
+    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
+  ): Promise<QueryAnalysis> {
+    // Classify query type
+    const type = this.classifyQuery(query);
+    
+    // Detect document reference
+    const documentReference = await this.detectDocumentReference(query);
+    
+    // Extract key terms (words > 3 chars, excluding common words)
+    const stopWords = new Set(['what', 'when', 'where', 'which', 'that', 'this', 'these', 'those', 'about', 'from', 'with', 'have', 'been', 'were', 'will', 'would', 'could', 'should', 'their', 'there', 'they', 'your', 'more', 'some', 'than', 'into', 'only', 'other', 'such', 'also', 'most', 'very']);
+    const keyTerms = query
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 3 && !stopWords.has(word));
+    
+    // Check if this is a follow-up question
+    const followUpPatterns = /\b(it|this|that|these|those|the same|above|previous|mentioned|convert it|what about|how about|and|also|too|the amount|the fee|the payment|the total)\b/i;
+    const isFollowUp = conversationHistory && conversationHistory.length > 0 && followUpPatterns.test(query);
+
+    return {
+      type,
+      documentReference: documentReference || undefined,
+      keyTerms,
+      isFollowUp: isFollowUp || false
+    };
+  }
+
+  /**
+   * IMPROVED: Get retrieval configuration based on query type (Requirements 2.2)
+   * Uses adaptive thresholds from the design spec
+   */
+  private static getRetrievalConfig(queryType: QueryType, hasDocumentReference: boolean = false): RetrievalConfig {
+    const threshold = this.getAdaptiveThreshold(queryType, hasDocumentReference);
+    
     switch (queryType) {
       case 'FACTUAL':
-        return { topK: 4, threshold: 0.5, strategy: 'hybrid', useQueryExpansion: false };
+        return { topK: 6, threshold, strategy: 'hybrid', useQueryExpansion: false };
       case 'EXPLANATORY':
-        return { topK: 6, threshold: 0.45, strategy: 'hybrid', useQueryExpansion: true };
+        return { topK: 8, threshold, strategy: 'hybrid', useQueryExpansion: true };
       case 'SUMMARIZATION':
-        return { topK: 8, threshold: 0.4, strategy: 'hybrid', useQueryExpansion: true };
+        return { topK: 10, threshold, strategy: 'hybrid', useQueryExpansion: true };
       case 'SPECIFIC':
-        return { topK: 3, threshold: 0.55, strategy: 'hybrid', useQueryExpansion: false };
+        return { topK: 5, threshold, strategy: 'hybrid', useQueryExpansion: false };
       case 'COMPARATIVE':
-        return { topK: 6, threshold: 0.45, strategy: 'hybrid', useQueryExpansion: true };
-      default:
-        return { topK: 5, threshold: 0.45, strategy: 'hybrid', useQueryExpansion: false };
+        return { topK: 8, threshold, strategy: 'hybrid', useQueryExpansion: true };
+      default: // GENERAL
+        return { topK: 6, threshold, strategy: 'hybrid', useQueryExpansion: false };
     }
   }
 
@@ -171,33 +251,58 @@ export class AgentService {
   }
 
   /**
-   * IMPROVED: Retriever Agent with query expansion, document name detection, and better filtering
+   * IMPROVED: Retriever Agent with query analysis, adaptive thresholds, and query expansion (Requirements 2.1-2.5)
    */
   static async retrieve(
     question: string, 
     strategy: RetrievalStrategy = 'hybrid', 
-    rerank: boolean = true
-  ): Promise<{ chunks: RelevantChunk[]; trace: any[]; queryExpanded: boolean }> {
+    rerank: boolean = true,
+    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
+  ): Promise<{ chunks: RelevantChunk[]; trace: any[]; queryExpanded: boolean; queryAnalysis: QueryAnalysis }> {
     const trace: any[] = [];
     let chunks: RelevantChunk[];
     let queryExpanded = false;
 
-    // NEW: Check if query references a specific document by name
-    const docRef = await this.detectDocumentReference(question);
-    if (docRef) {
+    // NEW: Comprehensive query analysis (Requirements 2.2, 2.3)
+    const queryAnalysis = await this.analyzeQuery(question, conversationHistory);
+    trace.push({ 
+      step: 'query-analysis', 
+      detail: { 
+        queryType: queryAnalysis.type,
+        hasDocumentReference: !!queryAnalysis.documentReference,
+        keyTerms: queryAnalysis.keyTerms.slice(0, 5),
+        isFollowUp: queryAnalysis.isFollowUp
+      } 
+    });
+
+    // Get adaptive config based on query analysis
+    const config = this.getRetrievalConfig(queryAnalysis.type, !!queryAnalysis.documentReference);
+    trace.push({ step: 'retrieval-config', detail: config });
+
+    // Handle document-referenced queries with lower threshold (Requirements 2.3)
+    if (queryAnalysis.documentReference) {
       trace.push({ 
         step: 'document-reference-detected', 
-        detail: { documentId: docRef.documentId, documentName: docRef.documentName } 
+        detail: { 
+          documentId: queryAnalysis.documentReference.documentId, 
+          documentName: queryAnalysis.documentReference.documentName,
+          threshold: DOCUMENT_REFERENCE_THRESHOLD
+        } 
       });
       
       // Search within the specific document with lower threshold
-      chunks = await VectorService.searchSimilarWithin(question, [docRef.documentId], 6, 0.3);
+      chunks = await VectorService.searchSimilarWithin(
+        question, 
+        [queryAnalysis.documentReference.documentId], 
+        10, // Increased initial candidates (Requirements 2.1)
+        DOCUMENT_REFERENCE_THRESHOLD
+      );
       
       // If we found chunks from the referenced document, return them
       if (chunks.length > 0) {
         trace.push({ 
           step: 'document-specific-retrieval', 
-          detail: { count: chunks.length, documentName: docRef.documentName } 
+          detail: { count: chunks.length, documentName: queryAnalysis.documentReference.documentName } 
         });
         
         // Log chunk quality
@@ -214,14 +319,9 @@ export class AgentService {
           } 
         });
         
-        return { chunks, trace, queryExpanded: false };
+        return { chunks, trace, queryExpanded: false, queryAnalysis };
       }
     }
-
-    // Classify query and get optimal config
-    const queryType = this.classifyQuery(question);
-    const config = this.getRetrievalConfig(queryType);
-    trace.push({ step: 'query-analysis', detail: { queryType, config } });
 
     // Optionally expand query for better recall
     let effectiveQuery = question;
@@ -261,6 +361,41 @@ export class AgentService {
     } else {
       chunks = await VectorService.searchSimilar(effectiveQuery, effectiveLimit, effectiveThreshold);
       trace.push({ step: 'retrieval', detail: { strategy: 'vector', threshold: effectiveThreshold } });
+    }
+
+    // NEW: Query expansion on low confidence (Requirements 2.5)
+    if (chunks.length > 0 && chunks[0].similarity < LOW_CONFIDENCE_THRESHOLD && !queryExpanded) {
+      trace.push({ 
+        step: 'low-confidence-detected', 
+        detail: { topSimilarity: chunks[0].similarity, threshold: LOW_CONFIDENCE_THRESHOLD } 
+      });
+      
+      try {
+        const expandedQuery = await ClaudeService.expandQuery(question);
+        if (expandedQuery !== question) {
+          const expandedChunks = await VectorService.searchSimilarHybrid(expandedQuery, { 
+            limit: effectiveLimit, 
+            minSimilarity: effectiveThreshold * 0.8, // Slightly lower threshold for expanded query
+            alpha: 0.55, 
+            rerank 
+          });
+          
+          if (expandedChunks.length > 0 && expandedChunks[0].similarity > chunks[0].similarity) {
+            chunks = expandedChunks;
+            queryExpanded = true;
+            trace.push({ 
+              step: 'query-expansion-retry', 
+              detail: { 
+                original: question, 
+                expanded: expandedQuery,
+                newTopSimilarity: expandedChunks[0].similarity
+              } 
+            });
+          }
+        }
+      } catch (err) {
+        trace.push({ step: 'query-expansion-failed', detail: { error: (err as Error).message } });
+      }
     }
 
     // Graph RAG: if we can ground entities, narrow to docIds within 2-hop neighborhood
@@ -306,7 +441,7 @@ export class AgentService {
       });
     }
 
-    return { chunks, trace, queryExpanded };
+    return { chunks, trace, queryExpanded, queryAnalysis };
   }
 
   /**
@@ -391,8 +526,8 @@ export class AgentService {
 
     const searchQuery = clarifying ? `${effectiveQuestion}\nClarification: ${clarifying}` : effectiveQuestion;
 
-    // 2) Retrieve with improved logic
-    const { chunks, trace, queryExpanded } = await this.retrieve(searchQuery, strategy, rerank);
+    // 2) Retrieve with improved logic and conversation history
+    const { chunks, trace, queryExpanded, queryAnalysis } = await this.retrieve(searchQuery, strategy, rerank, conversationHistory);
     agentTrace.push(...trace);
     
     // Log chunks summary (not full content to keep trace manageable)

@@ -14,12 +14,16 @@ interface SearchResult {
   chunkId: string;
 }
 
+// Query type classification for weight adjustment (Requirements 5.2, 5.3)
+export type HybridQueryType = 'FACTUAL' | 'EXPLANATORY' | 'SPECIFIC' | 'CONCEPTUAL' | 'GENERAL';
+
 interface HybridSearchOptions {
   semanticWeight: number;  // 0-1, how much to weight semantic search
   keywordWeight: number;   // 0-1, how much to weight keyword search
   limit: number;
   minScore: number;
   rerank: boolean;
+  queryType?: HybridQueryType; // Optional: override auto-classification
 }
 
 const DEFAULT_OPTIONS: HybridSearchOptions = {
@@ -30,14 +34,71 @@ const DEFAULT_OPTIONS: HybridSearchOptions = {
   rerank: true
 };
 
+// Query-based weight configurations (Requirements 5.2, 5.3)
+// Keyword weight 0.5 for specific/factual queries
+// Vector weight 0.7 for conceptual/explanatory queries
+const QUERY_TYPE_WEIGHTS: Record<HybridQueryType, { semanticWeight: number; keywordWeight: number }> = {
+  FACTUAL: { semanticWeight: 0.5, keywordWeight: 0.5 },      // Balanced for factual queries
+  SPECIFIC: { semanticWeight: 0.4, keywordWeight: 0.6 },     // Higher keyword weight for specific queries
+  EXPLANATORY: { semanticWeight: 0.7, keywordWeight: 0.3 },  // Higher vector weight for explanatory
+  CONCEPTUAL: { semanticWeight: 0.7, keywordWeight: 0.3 },   // Higher vector weight for conceptual
+  GENERAL: { semanticWeight: 0.55, keywordWeight: 0.45 }     // Balanced default
+};
+
 export class HybridSearchService {
   
+  /**
+   * Classify query type for dynamic weight adjustment (Requirements 5.2, 5.3)
+   * Returns a HybridQueryType for selecting appropriate semantic/keyword weights
+   */
+  classifyQueryType(query: string): HybridQueryType {
+    const patterns: Record<HybridQueryType, RegExp> = {
+      // Specific queries: exact terms, names, quoted phrases (keyword weight 0.5+)
+      SPECIFIC: /["']|specific|exactly|precise|particular|exact|detailed|named|called|titled/i,
+      // Factual queries: who, what, when, where (keyword weight 0.5)
+      FACTUAL: /^(what|who|when|where|which|how many|how much|is there|are there|does|do|did|was|were|has|have|had)/i,
+      // Explanatory queries: why, how, explain (vector weight 0.7)
+      EXPLANATORY: /^(why|how|explain|describe|elaborate|tell me about|what causes|what makes)/i,
+      // Conceptual queries: abstract concepts, relationships (vector weight 0.7)
+      CONCEPTUAL: /(concept|theory|principle|relationship|meaning|significance|importance|impact|effect|influence|understand)/i,
+      // General: fallback
+      GENERAL: /.*/
+    };
+
+    // Check patterns in order of specificity
+    const orderedTypes: HybridQueryType[] = ['SPECIFIC', 'FACTUAL', 'EXPLANATORY', 'CONCEPTUAL', 'GENERAL'];
+    
+    for (const type of orderedTypes) {
+      if (type === 'GENERAL') continue; // Skip general, it's the fallback
+      if (patterns[type].test(query)) return type;
+    }
+    return 'GENERAL';
+  }
+
+  /**
+   * Get weights based on query type (Requirements 5.2, 5.3)
+   */
+  getQueryWeights(queryType: HybridQueryType): { semanticWeight: number; keywordWeight: number } {
+    return QUERY_TYPE_WEIGHTS[queryType];
+  }
+
   async search(
     query: string,
     options: Partial<HybridSearchOptions> = {}
   ): Promise<SearchResult[]> {
-    const opts = { ...DEFAULT_OPTIONS, ...options };
     const startTime = Date.now();
+
+    // Classify query and get appropriate weights (Requirements 5.2, 5.3)
+    const queryType = options.queryType || this.classifyQueryType(query);
+    const typeWeights = this.getQueryWeights(queryType);
+    
+    // Merge options with query-type-based weights
+    const opts: HybridSearchOptions = { 
+      ...DEFAULT_OPTIONS, 
+      semanticWeight: typeWeights.semanticWeight,
+      keywordWeight: typeWeights.keywordWeight,
+      ...options 
+    };
 
     try {
       // Run both searches in parallel
@@ -64,6 +125,9 @@ export class HybridSearchService {
 
       logger.info(`Hybrid search completed in ${Date.now() - startTime}ms`, {
         query: query.slice(0, 50),
+        queryType,
+        semanticWeight: opts.semanticWeight,
+        keywordWeight: opts.keywordWeight,
         semanticCount: semanticResults.length,
         keywordCount: keywordResults.length,
         finalCount: filteredResults.length

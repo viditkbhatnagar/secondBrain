@@ -2,6 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { OpenAI } from 'openai';
 import { EmbeddingCache } from '../utils/cache';
 import { logger } from '../utils/logger';
+import { ContextAssembler, ChunkWithPosition } from './contextAssembler';
+import { AnswerValidator, LOW_CONFIDENCE_DISCLAIMER } from './answerValidator';
 
 export interface SearchResult {
   answer: string;
@@ -16,6 +18,7 @@ export interface RelevantChunk {
   documentId: string;
   chunkId: string;
   similarity: number;
+  lowConfidence?: boolean; // Flag for fallback results when threshold not met (Requirements 5.5)
 }
 
 export class ClaudeService {
@@ -177,6 +180,8 @@ export class ClaudeService {
   /**
    * Resolve pronouns and references in follow-up questions
    * Returns both the resolved query AND the original for hybrid search
+   * 
+   * Requirements 4.6: Resolve pronouns (it, this, that, these, those) when conversation history exists
    */
   static async resolveFollowUpQuery(
     currentQuery: string,
@@ -186,10 +191,50 @@ export class ClaudeService {
       return { resolvedQuery: currentQuery, isFollowUp: false, searchQueries: [currentQuery] };
     }
 
-    // Check if query contains pronouns or references that need resolution
-    const followUpPatterns = /\b(it|this|that|these|those|the same|above|previous|mentioned|convert it|what about|how about|and|also|too|the amount|the fee|the payment|the total)\b/i;
+    // Enhanced pronoun and reference patterns for follow-up detection (Requirements 4.6)
+    const followUpPatterns = [
+      // Basic pronouns
+      /\b(it|its|itself)\b/i,
+      /\b(this|that|these|those)\b/i,
+      /\b(they|them|their|theirs|themselves)\b/i,
+      /\b(he|him|his|himself|she|her|hers|herself)\b/i,
+      
+      // Reference phrases
+      /\b(the same|same thing|same one)\b/i,
+      /\b(above|previous|mentioned|earlier|last)\b/i,
+      /\b(the one|that one|this one)\b/i,
+      
+      // Conversational follow-ups
+      /\b(what about|how about|and what|and how)\b/i,
+      /\b(also|too|as well|in addition)\b/i,
+      /\b(more|another|other|else)\b/i,
+      
+      // Action references
+      /\b(convert it|change it|update it|modify it|delete it|remove it)\b/i,
+      /\b(do that|do this|do the same)\b/i,
+      /\b(show me|tell me more|explain)\b/i,
+      
+      // Quantity/value references
+      /\b(the amount|the value|the number|the total|the sum)\b/i,
+      /\b(the fee|the cost|the price|the rate)\b/i,
+      /\b(the payment|the balance|the result)\b/i,
+      
+      // Document/content references
+      /\b(the document|the file|the section|the part)\b/i,
+      /\b(the answer|the response|the information)\b/i,
+      
+      // Comparison references
+      /\b(compared to|versus|vs|instead of)\b/i,
+      /\b(better|worse|different|similar)\b/i,
+      
+      // Continuation patterns
+      /^(and|but|so|then|also|however)\b/i,
+      /^(why|how come|what if)\b/i,
+    ];
     
-    if (!followUpPatterns.test(currentQuery)) {
+    const isFollowUp = followUpPatterns.some(pattern => pattern.test(currentQuery));
+    
+    if (!isFollowUp) {
       return { resolvedQuery: currentQuery, isFollowUp: false, searchQueries: [currentQuery] };
     }
 
@@ -209,13 +254,19 @@ ${historyText}
 FOLLOW-UP QUESTION: "${currentQuery}"
 
 INSTRUCTIONS:
-- Replace pronouns (it, this, that, the amount, etc.) with the ACTUAL VALUES from the conversation
+- Replace ALL pronouns (it, this, that, they, them, the amount, etc.) with the ACTUAL VALUES or ENTITIES from the conversation
 - If the user asks to "convert" something, include the SPECIFIC amount and currency from the previous answer
+- If the user refers to "the document" or "the file", include the actual document name
+- If the user says "more" or "also", include what they want more of
 - Make the question standalone so it can be understood without context
 - Keep the intent of the original question
-- Be specific with numbers and values
+- Be specific with numbers, names, and values
+- If multiple things could be referenced, choose the most recent/relevant one
 
-Example: If previous answer mentioned "34,913.0024 USD" and user asks "convert it to AED", rewrite as "convert 34,913.0024 USD to AED"
+Examples:
+- If previous answer mentioned "34,913.0024 USD" and user asks "convert it to AED", rewrite as "convert 34,913.0024 USD to AED"
+- If previous answer discussed "Project Alpha" and user asks "what about the deadline?", rewrite as "what is the deadline for Project Alpha?"
+- If user asks "and the budget?" after discussing a project, rewrite as "what is the budget for [project name]?"
 
 REWRITTEN QUESTION (return ONLY the rewritten question, nothing else):`;
 
@@ -239,16 +290,17 @@ REWRITTEN QUESTION (return ONLY the rewritten question, nothing else):`;
         };
       }
       
-      return { resolvedQuery: currentQuery, isFollowUp: false, searchQueries: [currentQuery] };
+      return { resolvedQuery: currentQuery, isFollowUp: true, searchQueries: [currentQuery] };
     } catch (error: any) {
       console.warn('Query resolution failed:', error.message);
-      return { resolvedQuery: currentQuery, isFollowUp: false, searchQueries: [currentQuery] };
+      return { resolvedQuery: currentQuery, isFollowUp: true, searchQueries: [currentQuery] };
     }
   }
 
   /**
    * Answer question based on relevant document chunks using Claude
    * Now supports conversation history for context
+   * Uses ContextAssembler to order chunks by document position (Requirements 4.2)
    */
   static async answerQuestion(
     question: string, 
@@ -268,11 +320,16 @@ REWRITTEN QUESTION (return ONLY the rewritten question, nothing else):`;
     }
 
     try {
-      // Prepare context from relevant chunks
-      const context = this.prepareContext(relevantChunks);
+      // Use ContextAssembler to order chunks by document position (Requirements 4.2)
+      const assembler = new ContextAssembler({ maxChunks: 6, orderByPosition: true });
+      const assembled = assembler.assemble(relevantChunks as ChunkWithPosition[]);
+      const orderedChunks = assembled.chunks;
+      
+      // Prepare context from ordered chunks
+      const context = this.prepareContext(orderedChunks);
       
       // Create the prompt for Claude with conversation history
-      const prompt = this.createAnswerPrompt(question, context, relevantChunks, conversationHistory);
+      const prompt = this.createAnswerPrompt(question, context, orderedChunks, conversationHistory);
 
       // Get response from Claude
       const response = await this.anthropic.messages.create({
@@ -295,15 +352,19 @@ REWRITTEN QUESTION (return ONLY the rewritten question, nothing else):`;
         throw new Error('Empty response received from Claude API');
       }
       
-      // Calculate confidence based on chunk relevance scores
-      const confidence = this.calculateConfidence(relevantChunks);
+      // Calculate confidence based on chunk relevance scores (use ordered chunks)
+      const confidence = this.calculateConfidence(orderedChunks);
       
-      // Extract unique source documents
-      const sources = [...new Set(relevantChunks.map(chunk => chunk.documentName))];
+      // Add low confidence disclaimer if needed (Requirements 6.3)
+      const validator = new AnswerValidator();
+      const finalAnswer = validator.addDisclaimerIfNeeded(answer, confidence);
+      
+      // Extract unique source documents from ordered chunks
+      const sources = [...new Set(orderedChunks.map(chunk => chunk.documentName))];
 
       return {
-        answer,
-        relevantChunks,
+        answer: finalAnswer,
+        relevantChunks: orderedChunks,
         confidence,
         sources
       };
@@ -600,6 +661,7 @@ Topics:`;
 
   /**
    * IMPROVED: Create a well-structured prompt for Claude with better grounding and conversation context
+   * Enhanced for completeness per Requirements 4.3, 4.4, 6.5
    */
   private static createAnswerPrompt(
     question: string, 
@@ -624,9 +686,17 @@ ${recentHistory.map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg
 `;
     }
 
-    return `You are a hyper-personalized research assistant for the user's personal knowledge base. Your job is to answer questions about THEIR documents with precision and helpfulness.
+    return `You are a hyper-personalized research assistant for the user's personal knowledge base. Your job is to answer questions about THEIR documents with COMPLETENESS and precision.
 
-CRITICAL RULES:
+CRITICAL RULES FOR COMPLETENESS (Requirements 4.3, 4.4, 6.5):
+1. Extract and include ALL relevant details from the sources - do not summarize away important information
+2. When the question asks for specific information, provide EVERY detail found in the sources
+3. For lists and enumerations: Include ALL items mentioned in the sources, not just a subset
+4. If sources contain numbered lists, bullet points, or step-by-step instructions, preserve the COMPLETE structure
+5. When multiple sources contain complementary information, synthesize ALL of it into your answer
+6. Prioritize ACCURACY and COMPLETENESS over brevity - users need comprehensive answers
+
+CRITICAL RULES FOR ACCURACY:
 1. ALWAYS check the conversation history first - if the user is asking a follow-up question, use the values/data from previous messages
 2. For conversion questions: Use the EXACT values from the conversation history, not from documents
 3. If the context doesn't contain relevant information AND conversation history doesn't help, say "I couldn't find specific information about this in your documents."
@@ -643,17 +713,24 @@ ${relevanceNote}
 
 CURRENT QUESTION: ${question}
 
+SPECIAL INSTRUCTIONS FOR LISTS AND ENUMERATIONS (Requirement 6.5):
+- If the question asks "what are the..." or "list all..." or "how many...", ensure you include EVERY item from the sources
+- Count items carefully - if a source lists 5 items, your answer must include all 5
+- For numbered steps or procedures, include ALL steps in order
+- If items span multiple sources, combine them into a complete list
+- Explicitly state the total count when listing items (e.g., "There are 5 key points:")
+
 SPECIAL INSTRUCTIONS FOR FOLLOW-UP QUESTIONS:
 - If the user asks to "convert" something, look at the CONVERSATION HISTORY for the specific amount
 - If the user says "it", "that", "the amount", refer to the most recent relevant value in the conversation
 - For currency conversions: If you have the amount from conversation history, you can use general knowledge for exchange rates OR look for rates in the documents
-- Example: If previous answer said "34,913.0024 USD" and user asks "convert to AED", calculate: 34,913.0024 × 3.67 ≈ 128,130.78 AED (using standard USD/AED rate)
 
 GENERAL INSTRUCTIONS:
-- Base your answer PRIMARILY on Source 1 and Source 2 (highest relevance)
+- Base your answer PRIMARILY on Source 1 and Source 2 (highest relevance), but include relevant details from ALL sources
 - Cite sources as [1], [2], etc. when making specific claims from documents
-- Keep your answer clear, concise, and well-structured
-- Be proactive: if you can provide additional helpful information, do so
+- Structure your answer clearly - use bullet points or numbered lists when appropriate
+- Be proactive: if you can provide additional helpful information from the sources, do so
+- Double-check that you haven't omitted any important details before finalizing your answer
 
 ANSWER:`;
   }

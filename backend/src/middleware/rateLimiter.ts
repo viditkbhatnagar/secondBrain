@@ -1,4 +1,4 @@
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 import { Request, Response } from 'express';
 import { logger } from '../utils/logger';
@@ -15,19 +15,17 @@ const createRateLimitResponse = (code: string, message: string) => ({
   }
 });
 
-// IPv6-compliant key generator using express-rate-limit's helper
+// IPv6-compliant key generator
 const keyGenerator = (req: Request): string => {
-  // Use the built-in ipKeyGenerator for proper IPv6 handling
-  const ip = ipKeyGenerator(req);
-  
-  // If behind a proxy, check X-Forwarded-For header
+  // If behind a proxy, check X-Forwarded-For header first
   const forwarded = req.headers['x-forwarded-for'];
   if (forwarded) {
     const forwardedIp = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0];
-    return ipKeyGenerator({ ...req, ip: forwardedIp.trim() } as Request);
+    return forwardedIp.trim();
   }
   
-  return ip;
+  // Fall back to req.ip (Express's built-in IP detection)
+  return req.ip || req.socket?.remoteAddress || 'unknown';
 };
 
 // Log rate limit hits
