@@ -30,7 +30,6 @@ Deploy Second Brain to Render for production-ready performance.
    NODE_ENV=production
    PORT=3001
    MONGODB_URI=<your-mongodb-atlas-uri>
-   ANTHROPIC_API_KEY=<your-anthropic-key>
    OPENAI_API_KEY=<your-openai-key>
    REDIS_ENABLED=true
    REDIS_URL=<from-redis-service>
@@ -106,7 +105,6 @@ Deploy Second Brain to Render for production-ready performance.
 | Variable | Description |
 |----------|-------------|
 | `MONGODB_URI` | MongoDB Atlas connection string |
-| `ANTHROPIC_API_KEY` | Claude API key |
 | `OPENAI_API_KEY` | OpenAI API key (for embeddings) |
 
 ### Recommended

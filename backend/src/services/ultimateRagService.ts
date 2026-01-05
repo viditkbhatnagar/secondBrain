@@ -54,7 +54,7 @@ const DEFAULT_CONFIG: RAGConfig = {
   enableReranking: true,
   enableQueryDecomposition: true,
   enableAdaptiveRetrieval: true,
-  model: 'gpt-4-turbo-preview',
+  model: 'gpt-5',
   streaming: false
 };
 
@@ -452,8 +452,8 @@ Your accuracy and completeness are paramount. Users trust your citations and rel
           content: `SOURCES:\n${sourcesText}\n\nQUESTION: ${query}\n\nProvide a comprehensive, well-cited answer that includes ALL relevant details from the sources:`
         }
       ],
-      temperature: 0.3, // Lower temperature for more accurate responses
-      max_tokens: 1500
+      temperature: 1,
+      max_completion_tokens: 1500
     });
 
     return response.choices[0]?.message?.content || '';

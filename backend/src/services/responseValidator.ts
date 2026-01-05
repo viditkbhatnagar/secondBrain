@@ -129,7 +129,7 @@ export class ResponseValidator {
   private async verifyClaimWithLLM(claim: string, sources: string[]): Promise<boolean> {
     try {
       const response = await this.getOpenAI().chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-5',
         messages: [
           {
             role: 'system',
@@ -140,8 +140,8 @@ export class ResponseValidator {
             content: `Claim: "${claim}"\n\nSources:\n${sources.slice(0, 3).join('\n\n')}\n\nIs this a hallucination (not supported)?`
           }
         ],
-        temperature: 0,
-        max_tokens: 10
+        temperature: 1,
+        max_completion_tokens: 10
       });
 
       return response.choices[0]?.message?.content?.toLowerCase().includes('true') || false;

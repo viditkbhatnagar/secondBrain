@@ -85,10 +85,10 @@ export const SourcesAccordion: React.FC<SourcesAccordionProps> = ({
                       </span>
                     </div>
                     <Badge
-                      variant={source.relevance >= 0.7 ? 'success' : source.relevance >= 0.5 ? 'warning' : 'secondary'}
+                      variant={(source.relevance || source.similarity || 0) >= 0.7 ? 'success' : (source.relevance || source.similarity || 0) >= 0.5 ? 'warning' : 'secondary'}
                       size="sm"
                     >
-                      {Math.round(source.relevance * 100)}%
+                      {Math.round((source.relevance || source.similarity || 0.75) * 100)}%
                     </Badge>
                   </div>
 
@@ -100,8 +100,8 @@ export const SourcesAccordion: React.FC<SourcesAccordionProps> = ({
 
                   <div className="pl-7">
                     <Progress
-                      value={source.relevance * 100}
-                      variant={source.relevance >= 0.7 ? 'success' : source.relevance >= 0.5 ? 'warning' : 'primary'}
+                      value={(source.relevance || source.similarity || 0.75) * 100}
+                      variant={(source.relevance || source.similarity || 0) >= 0.7 ? 'success' : (source.relevance || source.similarity || 0) >= 0.5 ? 'warning' : 'primary'}
                       size="sm"
                     />
                   </div>

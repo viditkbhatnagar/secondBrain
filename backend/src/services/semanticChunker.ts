@@ -193,7 +193,7 @@ export class SemanticChunker {
   private async generateChunkMetadata(content: string): Promise<{ summary: string; keywords: string[] }> {
     try {
       const response = await this.getOpenAI().chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-5',
         messages: [
           {
             role: 'system',
@@ -201,8 +201,8 @@ export class SemanticChunker {
           },
           { role: 'user', content: content.slice(0, 1000) }
         ],
-        temperature: 0,
-        max_tokens: 100,
+        temperature: 1,
+        max_completion_tokens: 100,
         response_format: { type: 'json_object' }
       });
 

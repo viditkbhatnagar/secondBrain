@@ -14,7 +14,6 @@ cp .env.example .env
 
 Edit `.env` and add your API keys:
 ```
-ANTHROPIC_API_KEY=your_key_here
 OPENAI_API_KEY=your_key_here
 ```
 
@@ -89,7 +88,6 @@ docker-compose ps
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ANTHROPIC_API_KEY` | Anthropic API key (required) | - |
 | `OPENAI_API_KEY` | OpenAI API key (required) | - |
 | `MONGODB_URI` | MongoDB connection string | `mongodb://mongodb:27017/knowledge-base` |
 | `REDIS_ENABLED` | Enable Redis caching | `true` |

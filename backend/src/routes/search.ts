@@ -1,6 +1,6 @@
 import express from 'express';
 import { VectorService } from '../services/VectorService';
-import { ClaudeService } from '../services/ClaudeService';
+import { GptService } from '../services/GptService';
 import { DatabaseService } from '../services/DatabaseService';
 import { AgentService } from '../services/AgentService';
 import { analyticsService } from '../services/AnalyticsService';
@@ -54,8 +54,8 @@ searchRouter.use(searchLimiter);
  *                 default: 0.5
  *               model:
  *                 type: string
- *                 enum: [gpt-3.5-turbo, gpt-4, gpt-4-turbo-preview]
- *                 default: gpt-3.5-turbo
+ *                 enum: [gpt-5]
+ *                 default: gpt-5
  *     responses:
  *       200:
  *         description: Search results with AI answer
@@ -73,7 +73,7 @@ searchRouter.post('/optimized', aiLimiter, async (req: Request, res: Response) =
     streaming: z.boolean().optional().default(false),
     maxSources: z.number().min(1).max(20).optional().default(5),
     minConfidence: z.number().min(0).max(1).optional().default(0.5),
-    model: z.enum(['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo-preview']).optional().default('gpt-3.5-turbo')
+    model: z.enum(['gpt-5']).optional().default('gpt-5')
   });
 
   try {
@@ -155,7 +155,7 @@ searchRouter.get('/quick', async (req: Request, res: Response) => {
     const result = await optimizedRagService.query(query, sessionId, {
       maxSources: 3,
       validateResponse: false,
-      model: 'gpt-3.5-turbo'
+      model: 'gpt-5'
     });
 
     res.json(result);
@@ -276,12 +276,12 @@ searchRouter.post('/', validateBody(searchSchema), async (req, res) => {
       });
     }
 
-    // Generate answer using Claude
+    // Generate answer using GPT-5
     const startTime = Date.now();
-    const searchResult = await ClaudeService.answerQuestion(query, relevantChunks);
+    const searchResult = await GptService.answerQuestion(query, relevantChunks);
     const responseTime = Date.now() - startTime;
 
-    // Check if Claude's answer indicates it couldn't find relevant info
+    // Check if GPT's answer indicates it couldn't find relevant info
     // If so, fall back to OpenAI for general knowledge
     const noInfoPatterns = [
       /i('m| am) afraid i don't have/i,
@@ -300,7 +300,7 @@ searchRouter.post('/', validateBody(searchSchema), async (req, res) => {
     
     if (answerIndicatesNoInfo && OpenAIService.isConfigured()) {
       try {
-        logger.info('Claude indicated no relevant info found, falling back to OpenAI', { requestId: req.requestId });
+        logger.info('GPT indicated no relevant info found, falling back to OpenAI', { requestId: req.requestId });
         const openAIResult = await OpenAIService.generateGeneralAnswer(query);
         
         const response = {
@@ -334,7 +334,7 @@ searchRouter.post('/', validateBody(searchSchema), async (req, res) => {
         return res.json(response);
       } catch (openAIError: any) {
         logger.error('OpenAI fallback failed:', { error: openAIError.message, requestId: req.requestId });
-        // Continue with Claude's original answer
+        // Continue with GPT's original answer
       }
     }
 
@@ -403,32 +403,6 @@ searchRouter.post('/', validateBody(searchSchema), async (req, res) => {
         error: 'Service Quota Exceeded',
         message: 'Search service has exceeded its quota. Please contact the administrator.',
         code: 'OPENAI_QUOTA_ERROR'
-      };
-    }
-    // Claude API errors
-    else if (errorMessage.includes('Claude API authentication')) {
-      errorResponse = {
-        error: 'Configuration Error',
-        message: 'AI service authentication failed. Please contact the administrator.',
-        code: 'CLAUDE_AUTH_ERROR'
-      };
-    } else if (errorMessage.includes('Claude API rate limit')) {
-      errorResponse = {
-        error: 'Service Temporarily Unavailable',
-        message: 'AI service is temporarily rate-limited. Please try again in a few minutes.',
-        code: 'CLAUDE_RATE_LIMIT'
-      };
-    } else if (errorMessage.includes('credit balance too low')) {
-      errorResponse = {
-        error: 'Service Credits Exhausted',
-        message: 'AI service has insufficient credits. Please contact the administrator to add credits.',
-        code: 'CLAUDE_CREDITS_ERROR'
-      };
-    } else if (errorMessage.includes('Claude model not found')) {
-      errorResponse = {
-        error: 'Service Configuration Error',
-        message: 'AI model configuration issue. Please contact the administrator.',
-        code: 'MODEL_NOT_FOUND'
       };
     }
     // Vector search errors
@@ -538,7 +512,7 @@ searchRouter.post('/related-questions', aiLimiter, validateBody(relatedQuestions
   try {
     const { query, answer } = req.body;
 
-    const questions = await ClaudeService.generateRelatedQuestions(query, answer);
+    const questions = await GptService.generateRelatedQuestions(query, answer);
     res.json({ questions });
   } catch (error: any) {
     logger.error('Related questions error:', { error: error.message, requestId: req.requestId });
@@ -739,7 +713,7 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     let isFollowUp = false;
     
     if (conversationHistory.length > 0) {
-      const resolution = await ClaudeService.resolveFollowUpQuery(query, conversationHistory);
+      const resolution = await GptService.resolveFollowUpQuery(query, conversationHistory);
       effectiveQuery = resolution.resolvedQuery;
       searchQueries = resolution.searchQueries;
       isFollowUp = resolution.isFollowUp;
@@ -792,11 +766,12 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     // Step 6: answer with conversation history (simulate token streaming by chunking the answer)
     // If no chunks found, use OpenAI for general knowledge streaming
     let isGeneralKnowledge = false;
+    const CONFIDENCE_THRESHOLD = 30; // Confidence threshold for fallback to OpenAI
     
     if (allChunks.length === 0 && OpenAIService.isConfigured()) {
       // Stream from OpenAI for general knowledge
       isGeneralKnowledge = true;
-      send('step', { label: 'Using general knowledge (OpenAI)' });
+      send('step', { label: 'No relevant documents found - Using general knowledge' });
       
       try {
         for await (const chunk of OpenAIService.streamGeneralAnswer(effectiveQuery, conversationHistory)) {
@@ -808,7 +783,7 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
         
         // Step 7: finalize and persist
         await DatabaseService.logSearchQuery(query, 0, 70, 0);
-        await DatabaseService.addMessage(tid, 'assistant', fullResult.answer, { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: true } }, trace);
+        await DatabaseService.addMessage(tid, 'assistant', fullResult.answer, { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: true, fallbackReason: 'no_documents' } }, trace);
         
         // Track chat message analytics
         const sessionId = req.headers['x-session-id'] as string || req.ip || 'anonymous';
@@ -817,10 +792,11 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
           query: query.substring(0, 200),
           resultsCount: 0,
           confidence: 70,
-          isFollowUp
+          isFollowUp,
+          isGeneralKnowledge: true
         });
         
-        send('done', { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: true }, agentTrace: trace });
+        send('done', { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: true, confidence: 70 }, agentTrace: trace });
         res.end();
         return;
       } catch (openAIError) {
@@ -829,7 +805,69 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       }
     }
     
+    // Generate answer from documents
     const result = await AgentService.answer(effectiveQuery, allChunks, conversationHistory);
+    
+    // Check if confidence is too low - fallback to OpenAI
+    if (result.confidence < CONFIDENCE_THRESHOLD && OpenAIService.isConfigured()) {
+      logger.info(`Low confidence (${result.confidence}%) - Falling back to OpenAI general knowledge`);
+      isGeneralKnowledge = true;
+      send('step', { label: `Low confidence (${result.confidence}%) - Using general knowledge instead` });
+      
+      try {
+        // Stream answer from OpenAI
+        for await (const chunk of OpenAIService.streamGeneralAnswer(effectiveQuery, conversationHistory)) {
+          send('answer', { partial: chunk });
+        }
+        
+        // Get full answer for storage
+        const fullResult = await OpenAIService.generateGeneralAnswer(effectiveQuery, conversationHistory);
+        
+        // Step 7: finalize and persist with general knowledge flag
+        await DatabaseService.logSearchQuery(query, allChunks.length, 70, 0);
+        await DatabaseService.addMessage(tid, 'assistant', fullResult.answer, { 
+          metadata: { 
+            strategy, 
+            rerank, 
+            isFollowUp, 
+            isGeneralKnowledge: true, 
+            fallbackReason: 'low_confidence',
+            originalConfidence: result.confidence 
+          } 
+        }, trace);
+        
+        // Track chat message analytics
+        const sessionId = req.headers['x-session-id'] as string || req.ip || 'anonymous';
+        await analyticsService.trackEvent('chat_message', sessionId, {
+          threadId: tid,
+          query: query.substring(0, 200),
+          resultsCount: allChunks.length,
+          confidence: 70,
+          isFollowUp,
+          isGeneralKnowledge: true,
+          originalConfidence: result.confidence
+        });
+        
+        send('done', { 
+          metadata: { 
+            strategy, 
+            rerank, 
+            isFollowUp, 
+            isGeneralKnowledge: true, 
+            confidence: 70,
+            originalConfidence: result.confidence 
+          }, 
+          agentTrace: trace 
+        });
+        res.end();
+        return;
+      } catch (openAIError) {
+        logger.error('OpenAI low-confidence fallback failed:', { error: (openAIError as any).message });
+        // Fall through to use the original low-confidence answer
+      }
+    }
+    
+    // Use answer from documents
     const answer = result.answer || '';
     const tokenSize = 80;
     for (let i = 0; i < answer.length; i += tokenSize) {
@@ -840,7 +878,7 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
 
     // Step 7: finalize and persist
     await DatabaseService.logSearchQuery(query, allChunks.length, result.confidence, 0);
-    await DatabaseService.addMessage(tid, 'assistant', result.answer, { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: (result as any).isGeneralKnowledge || false } }, trace);
+    await DatabaseService.addMessage(tid, 'assistant', result.answer, { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: false } }, trace);
     
     // Track chat message analytics
     const sessionId = req.headers['x-session-id'] as string || req.ip || 'anonymous';
@@ -852,7 +890,7 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       isFollowUp
     });
     
-    send('done', { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: (result as any).isGeneralKnowledge || false }, agentTrace: trace });
+    send('done', { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: false, confidence: result.confidence }, agentTrace: trace });
     res.end();
   } catch (error) {
     logger.error('Agent stream error:', { error: (error as any).message, requestId: req.requestId });
@@ -947,7 +985,7 @@ searchRouter.post('/agent', aiLimiter, aiSpeedLimiter, validateBody(agentSearchS
     let isFollowUp = false;
     
     if (conversationHistory.length > 0) {
-      const resolution = await ClaudeService.resolveFollowUpQuery(query, conversationHistory);
+      const resolution = await GptService.resolveFollowUpQuery(query, conversationHistory);
       effectiveQuery = resolution.resolvedQuery;
       isFollowUp = resolution.isFollowUp;
     }

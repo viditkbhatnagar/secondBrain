@@ -12,7 +12,7 @@ import {
   AnswerValidator, 
   LOW_CONFIDENCE_DISCLAIMER 
 } from '../../services/answerValidator';
-import { RelevantChunk } from '../../services/ClaudeService';
+import { RelevantChunk } from '../../services/GptService';
 
 // Helper to generate a valid RelevantChunk
 const relevantChunkArb = (sourceIndex: number): fc.Arbitrary<RelevantChunk> => {

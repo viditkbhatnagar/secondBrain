@@ -94,7 +94,6 @@ The unified setup means **ONE web service** instead of separate frontend/backend
 Required:
 ```bash
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/knowledge-base
-ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 ```
 
@@ -167,7 +166,7 @@ Verify your `MONGODB_URI` in backend/.env
 **Backend:**
 - Node.js + Express + TypeScript
 - MongoDB + Mongoose
-- OpenAI (embeddings) + Anthropic Claude (chat)
+- OpenAI (embeddings + gpt-5 chat)
 - Redis (optional caching)
 - Vector search
 

@@ -19,7 +19,7 @@ export interface GeneralAnswer {
 }
 
 export class OpenAIService {
-  private static model = 'gpt-4o-mini'; // Fast and cost-effective
+  private static model = 'gpt-5'; // Highest quality per request
 
   /**
    * Check if OpenAI is configured
@@ -45,16 +45,25 @@ export class OpenAIService {
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         {
           role: 'system',
-          content: `You are a helpful AI assistant providing general knowledge answers.
+          content: `You are a helpful AI assistant providing comprehensive, detailed general knowledge answers.
 
-IMPORTANT FORMATTING RULES:
+IMPORTANT GUIDELINES:
+- Provide VERY DETAILED and THOROUGH responses
+- Cover the topic from multiple angles and perspectives
+- Include relevant examples, explanations, and context
+- Break down complex topics into understandable parts
+- Use line breaks and bullet points for better readability
+- Be comprehensive - don't hold back on information
+- Cost is not a concern, prioritize quality and completeness
+
+FORMATTING RULES:
 - Do NOT use markdown formatting (no **, no ##, no *, no backticks)
 - Use plain text only
 - For emphasis, use quotation marks like "important term" instead of **bold**
 - Use simple punctuation: periods, commas, question marks, exclamation points
-- Write in a natural, conversational tone
-- Keep responses clear and concise
-- Use line breaks for readability when listing multiple points`
+- Use line breaks generously for better readability
+- Use bullet points with • symbol when listing items
+- Write in a natural, conversational yet professional tone`
         }
       ];
 
@@ -77,8 +86,8 @@ IMPORTANT FORMATTING RULES:
       const response = await openai.chat.completions.create({
         model: this.model,
         messages,
-        max_tokens: 1500,
-        temperature: 0.7,
+        max_completion_tokens: 8000, // Increased for very detailed responses
+        temperature: 1,
       });
 
       let answer = response.choices[0]?.message?.content || 'I apologize, but I was unable to generate a response.';
@@ -117,15 +126,25 @@ IMPORTANT FORMATTING RULES:
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
         role: 'system',
-        content: `You are a helpful AI assistant providing general knowledge answers.
+        content: `You are a helpful AI assistant providing comprehensive, detailed general knowledge answers.
 
-IMPORTANT FORMATTING RULES:
+IMPORTANT GUIDELINES:
+- Provide VERY DETAILED and THOROUGH responses
+- Cover the topic from multiple angles and perspectives
+- Include relevant examples, explanations, and context
+- Break down complex topics into understandable parts
+- Use line breaks and bullet points for better readability
+- Be comprehensive - don't hold back on information
+- Cost is not a concern, prioritize quality and completeness
+
+FORMATTING RULES:
 - Do NOT use markdown formatting (no **, no ##, no *, no backticks)
 - Use plain text only
 - For emphasis, use quotation marks like "important term" instead of **bold**
 - Use simple punctuation: periods, commas, question marks, exclamation points
-- Write in a natural, conversational tone
-- Keep responses clear and concise`
+- Use line breaks generously for better readability
+- Use bullet points with • symbol when listing items
+- Write in a natural, conversational yet professional tone`
       }
     ];
 
@@ -146,8 +165,8 @@ IMPORTANT FORMATTING RULES:
     const stream = await openai.chat.completions.create({
       model: this.model,
       messages,
-      max_tokens: 1500,
-      temperature: 0.7,
+      max_completion_tokens: 8000, // Increased for very detailed responses
+      temperature: 1,
       stream: true,
     });
 

@@ -25,8 +25,11 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
     return <AlertCircle className="h-4 w-4" />;
   };
 
-  const formatSimilarity = (similarity: number) => {
-    return `${Math.round(similarity * 100)}%`;
+  const formatSimilarity = (chunk: any) => {
+    // Support both similarity (new) and relevance (legacy) fields
+    const score = chunk.similarity || chunk.relevance || 0.75;
+    if (!score || isNaN(score)) return '75%'; // Default fallback
+    return `${Math.round(score * 100)}%`;
   };
 
   // Handle error results
@@ -125,12 +128,12 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ results }) => {
                   </div>
                     <div className="flex items-center space-x-2">
                     <span className="text-xs text-gray-500">
-                      Relevance: {formatSimilarity(chunk.similarity)}
+                      Relevance: {formatSimilarity(chunk)}
                     </span>
                     <div className="w-16 bg-gray-200 rounded-full h-1">
                       <div
                         className="bg-blue-600 h-1 rounded-full transition-all"
-                        style={{ width: `${chunk.similarity * 100}%` }}
+                        style={{ width: `${((chunk.similarity || 0.75) * 100)}%` }}
                       ></div>
                     </div>
                       <button

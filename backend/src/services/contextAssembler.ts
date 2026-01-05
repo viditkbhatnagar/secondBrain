@@ -9,7 +9,7 @@
  * Requirements: 4.1, 4.2
  */
 
-import { RelevantChunk } from './ClaudeService';
+import { RelevantChunk } from './GptService';
 
 export interface ContextConfig {
   maxChunks: number;        // Maximum chunks to include (default: 6)

@@ -121,15 +121,6 @@ healthRouter.get('/detailed', async (_req, res) => {
     };
   }
 
-  // Check Claude API (just verify key exists)
-  checks.claude = {
-    status: process.env.ANTHROPIC_API_KEY ? 'configured' : 'not_configured',
-    details: { keyPresent: !!process.env.ANTHROPIC_API_KEY }
-  };
-  if (!process.env.ANTHROPIC_API_KEY) {
-    overallStatus = 'degraded';
-  }
-
   // Check OpenAI API (just verify key exists)
   checks.openai = {
     status: process.env.OPENAI_API_KEY ? 'configured' : 'not_configured',
@@ -217,17 +208,15 @@ healthRouter.get('/ready', async (_req, res) => {
   try {
     // Check if all critical services are ready
     const mongoReady = mongoose.connection.readyState === 1;
-    const claudeReady = !!process.env.ANTHROPIC_API_KEY;
     const openaiReady = !!process.env.OPENAI_API_KEY;
 
-    if (mongoReady && claudeReady && openaiReady) {
+    if (mongoReady && openaiReady) {
       res.json({ ready: true });
     } else {
       res.status(503).json({
         ready: false,
         missing: {
           database: !mongoReady,
-          claude: !claudeReady,
           openai: !openaiReady
         }
       });

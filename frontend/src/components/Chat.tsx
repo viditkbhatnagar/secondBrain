@@ -277,67 +277,105 @@ export const Chat: React.FC = () => {
     // Simulate thinking stages
     setTimeout(() => setThinkingStage('searching'), 800);
 
-    const params = new URLSearchParams({ query: prompt, strategy, rerank: String(rerank) });
-    if (tid) params.set('threadId', tid);
-    const url = `${API_ENDPOINTS.search}/agent/stream?${params.toString()}`;
-    const es = new EventSource(url);
+    // Use blazing search for much faster responses!
+    try {
+      const response = await fetch(API_ENDPOINTS.blazingSearch, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Session-ID': sessionStorage.getItem('session-id') || `session-${Date.now()}`
+        },
+        body: JSON.stringify({ 
+          query: prompt, 
+          maxSources: 3,
+          useCache: true
+        })
+      });
 
-    es.addEventListener('thread', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      newThreadId = data.threadId;
-      setActiveThreadId(data.threadId);
+      const result = await response.json();
+      
+      // Debug logging
+      console.log('Blazing search response:', result);
+      
+      const data = result.success ? result.data : result;
+      
+      // Check if we have an answer
+      if (!data || !data.answer) {
+        throw new Error(data?.message || 'No answer received from server');
+      }
+
+      // Create thread if needed
+      if (!tid) {
+        const threadRes = await fetch(`${API_ENDPOINTS.baseChat}/threads`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ strategy: 'hybrid', rerank: true })
+        });
+        const threadData = await threadRes.json();
+        newThreadId = threadData.threadId;
+        setActiveThreadId(newThreadId);
       loadThreads();
-      if (isFirstMessage && newThreadId) setTimeout(() => generateTitle(newThreadId!, prompt), 500);
-    });
+        if (newThreadId) setTimeout(() => generateTitle(newThreadId!, prompt), 500);
+      }
 
-    es.addEventListener('retrieval', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      setFoundCount(data.count || 0);
       setThinkingStage('found');
-      setTimeout(() => setThinkingStage('composing'), 1000);
-    });
+      setFoundCount(data.sources?.length || 0);
+      await new Promise(r => setTimeout(r, 300));
 
-    es.addEventListener('answer', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      fullAnswer += data.partial;
-      setThinkingStage(null);
-      // Update the streaming message
+      setThinkingStage('composing');
+      
+      // Simulate typing effect
+      fullAnswer = data.answer;
+      const words = fullAnswer.split(' ');
+      for (let i = 0; i < words.length; i += 3) {
+        const partial = words.slice(0, i + 3).join(' ');
       setMessages(prev => {
         const existing = prev.find(m => m.isStreaming);
         if (existing) {
-          return prev.map(m => m.isStreaming ? { ...m, content: fullAnswer } : m);
+            return prev.map(m => m.isStreaming ? { ...m, content: partial } : m);
         } else {
-          return [...prev, { role: 'assistant', content: fullAnswer, isStreaming: true, sources: [], confidence: 0 }];
+            return [...prev, { role: 'assistant', content: partial, isStreaming: true, sources: [], confidence: 0 }];
         }
       });
-    });
-
-    es.addEventListener('done', (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      // Extract sources from trace
-      const chunksSummary = data.agentTrace?.find((t: any) => t.step === 'chunks-summary');
-      if (chunksSummary?.detail?.sources) {
-        sources = chunksSummary.detail.sources.map((s: any) => ({
-          documentName: s.doc, relevance: s.sim / 100, snippet: ''
-        }));
+        await new Promise(r => setTimeout(r, 20));
       }
-      const qualityStep = data.agentTrace?.find((t: any) => t.step === 'retrieval-quality');
-      if (qualityStep?.detail?.topSimilarity) confidence = Math.min(qualityStep.detail.topSimilarity + 10, 99);
 
-      // Finalize the message
-      setMessages(prev => prev.map(m => m.isStreaming ? { ...m, isStreaming: false, sources, confidence } : m));
+      // Finalize
+      // Map sources with all required fields
+      sources = (data.sources || []).map((s: any, index: number) => ({
+        chunkId: s.chunkId || `chunk-${index}`,
+        documentName: s.documentName || 'Unknown',
+        documentId: s.documentId || 'unknown',
+        content: s.content || s.snippet || '',
+        snippet: (s.content || s.snippet || '').substring(0, 150),
+        similarity: s.relevanceScore || s.similarity || 0.75
+      }));
+      confidence = data.confidence || 75;
+
+      setMessages(prev =>
+        prev.map(m =>
+          m.isStreaming
+            ? { ...m, content: fullAnswer, isStreaming: false, sources, confidence }
+            : m
+        )
+      );
       setThinkingStage(null);
-      es.close();
+
+      console.log(`🚀 Chat completed in ${data.responseTime}ms`, {
+        cached: data.cached
     });
 
-    es.addEventListener('error', (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data);
-        setMessages(prev => [...prev.filter(m => !m.isStreaming), { role: 'assistant', content: `Error: ${data.message}`, sources: [], confidence: 0 }]);
-      } catch {}
+    } catch (error: any) {
+      console.error('Chat error:', error);
+      setMessages(prev =>
+        prev.map(m =>
+          m.isStreaming
+            ? { ...m, content: `Error: ${error.message}`, isStreaming: false }
+            : m
+        )
+      );
       setThinkingStage(null);
-      es.close();
-    });
+    }
   };
 
   const send = async () => {

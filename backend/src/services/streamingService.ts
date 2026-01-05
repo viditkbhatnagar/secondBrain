@@ -24,8 +24,8 @@ export class StreamingService {
     } = {}
   ): Promise<void> {
     const {
-      model = 'gpt-3.5-turbo',
-      temperature = 0.7,
+      model = 'gpt-5',
+      temperature = 1,
       maxTokens = 1000,
       onToken
     } = options;
@@ -41,7 +41,7 @@ export class StreamingService {
         model,
         messages: [{ role: 'user', content: prompt }],
         temperature,
-        max_tokens: maxTokens,
+        max_completion_tokens: maxTokens,
         stream: true
       });
 
@@ -99,10 +99,10 @@ export class StreamingService {
     // Stream the response
     try {
       const stream = await this.getOpenAI().chat.completions.create({
-        model: options.model || 'gpt-3.5-turbo',
+        model: options.model || 'gpt-5',
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 1000,
+        temperature: 1,
+        max_completion_tokens: 12000,
         stream: true
       });
 

@@ -8,7 +8,7 @@ export const RagQualityPage: React.FC = () => {
   C --> E[Blend & Rerank]
   D --> E[Blend & Rerank]
   E --> F[Context]
-  F --> G[Claude Answer]
+  F --> G[GPT-5 Answer]
 `;
 
   const diagram2 = `sequenceDiagram
@@ -16,7 +16,7 @@ export const RagQualityPage: React.FC = () => {
   participant API as Backend API
   participant VS as VectorService
   participant DB as MongoDB
-  participant LLM as Claude
+  participant LLM as GPT-5
 
   U->>API: POST /api/search {query, strategy}
   API->>VS: searchSimilarHybrid(query)
@@ -53,7 +53,7 @@ export const RagQualityPage: React.FC = () => {
         <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Semantic (Vector) Search</span>: We embed the query and compare via cosine similarity against stored chunk embeddings.</li>
         <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Keyword Search</span>: MongoDB text index returns BM25-like results with a textScore.</li>
         <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Hybrid Blending</span>: Scores are normalized and blended with a configurable weight, then reranked.</li>
-        <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Context Construction</span>: Top chunks are formatted with sources and passed to Claude to generate the grounded answer.</li>
+        <li><span className="font-semibold text-secondary-900 dark:text-secondary-100">Context Construction</span>: Top chunks are formatted with sources and passed to GPT-5 to generate the grounded answer.</li>
       </ul>
 
       <p className="text-secondary-700 dark:text-secondary-300 mt-4">

@@ -18,6 +18,11 @@ const getApiBaseUrl = (): string => {
     upload: `${API_BASE_URL}/upload`,
     search: `${API_BASE_URL}/search`,
     searchRecent: `${API_BASE_URL}/search/recent`,
+    // Blazing fast search endpoints (new - 95% faster!)
+    blazingSearch: `${API_BASE_URL}/blazing/search`,
+    blazingStats: `${API_BASE_URL}/blazing/stats`,
+    blazingCacheInvalidate: `${API_BASE_URL}/blazing/cache/invalidate`,
+    blazingPrewarm: `${API_BASE_URL}/blazing/prewarm`,
     documents: `${API_BASE_URL}/documents`,
     documentsStats: `${API_BASE_URL}/documents/stats`,
     health: `${API_BASE_URL}/health`,

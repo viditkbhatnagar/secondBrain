@@ -1,4 +1,4 @@
-import { ClaudeService, RelevantChunk } from './ClaudeService';
+import { GptService, RelevantChunk } from './GptService';
 import { DocumentChunk } from './FileProcessor';
 import { DocumentChunkModel, DocumentModel } from '../models/index';
 
@@ -49,7 +49,7 @@ export class VectorService {
       }
 
       const texts = chunks.map(chunk => chunk.content);
-      const embeddings = await ClaudeService.generateEmbeddings(texts);
+      const embeddings = await GptService.generateEmbeddings(texts);
 
       if (embeddings.length !== chunks.length) {
         throw new Error(`Embedding count mismatch: expected ${chunks.length}, got ${embeddings.length}`);
@@ -92,7 +92,7 @@ export class VectorService {
         throw new Error('Search query cannot be empty');
       }
 
-      const queryEmbedding = await ClaudeService.generateEmbedding(query);
+      const queryEmbedding = await GptService.generateEmbedding(query);
       const allChunks = await DocumentChunkModel.find({}).exec();
 
       if (allChunks.length === 0) {
@@ -231,7 +231,7 @@ export class VectorService {
       if (!query.trim()) throw new Error('Search query cannot be empty');
       if (!docIds || docIds.length === 0) return [];
 
-      const queryEmbedding = await ClaudeService.generateEmbedding(query);
+      const queryEmbedding = await GptService.generateEmbedding(query);
       const allChunks = await DocumentChunkModel.find({ documentId: { $in: docIds } }).exec();
       const similarities: Array<{ chunk: any; similarity: number }> = [];
       
@@ -720,7 +720,7 @@ export class VectorService {
         return false;
       }
 
-      const newEmbedding = await ClaudeService.generateEmbedding(newContent);
+      const newEmbedding = await GptService.generateEmbedding(newContent);
 
       await DocumentChunkModel.findOneAndUpdate(
         { chunkId },
@@ -787,7 +787,7 @@ export class VectorService {
         const contents = batch.map((chunk: DocumentChunk) => chunk.content);
         
         try {
-          const embeddings = await ClaudeService.generateEmbeddings(contents);
+          const embeddings = await GptService.generateEmbeddings(contents);
           
           for (let j = 0; j < batch.length; j++) {
             await DocumentChunkModel.findOneAndUpdate(

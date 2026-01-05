@@ -1,7 +1,7 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
-import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs-extra';
@@ -15,9 +15,10 @@ import { graphRouter } from './routes/graph';
 import { healthRouter } from './routes/health';
 import analyticsRouter from './routes/analytics';
 import ultimateSearchRouter from './routes/ultimateSearch';
+import { blazingSearchRouter } from './routes/blazingSearch';
 import { DatabaseService } from './services/DatabaseService';
 import { VectorService } from './services/VectorService';
-import { ClaudeService } from './services/ClaudeService';
+import { GptService } from './services/GptService';
 import { redisService } from './services/RedisService';
 import { cacheWarmer } from './services/cacheWarmer';
 import { swaggerSpec } from './config/swagger';
@@ -27,8 +28,6 @@ import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { apiLimiter, speedLimiter, uploadLimiter } from './middleware/rateLimiter';
 import { helmetConfig, mongoSanitizeConfig, xssSanitizer, suspiciousRequestDetector } from './middleware/security';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -143,6 +142,7 @@ const upload = multer({
 
 // Routes with rate limiting
 app.use('/api/upload', uploadLimiter, upload.single('file'), fileUploadRouter);
+app.use('/api/blazing', blazingSearchRouter); // Ultra-fast search endpoint
 app.use('/api/search', searchRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/chat', chatRouter);
@@ -235,10 +235,6 @@ setInterval(() => {
 async function startServer() {
   try {
     // Check for required environment variables
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error('ANTHROPIC_API_KEY is required. Please add it to your .env file.');
-    }
-    
     if (!process.env.OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY is required for embeddings. Please add it to your .env file.');
     }
@@ -262,8 +258,8 @@ async function startServer() {
     }
 
     // Initialize services in order
-    ClaudeService.initialize();
-    logger.info('✅ Claude service initialized');
+    GptService.initialize();
+    logger.info('✅ GPT service initialized');
 
     await DatabaseService.initialize();
     logger.info('✅ Database service initialized');

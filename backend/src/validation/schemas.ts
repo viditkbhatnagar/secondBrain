@@ -125,7 +125,7 @@ export const optimizedSearchSchema = z.object({
   streaming: z.boolean().default(false),
   maxSources: z.number().int().min(1).max(20).default(5),
   minConfidence: z.number().min(0).max(1).default(0.5),
-  model: z.enum(['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo-preview']).default('gpt-3.5-turbo'),
+  model: z.enum(['gpt-5']).default('gpt-5'),
   useCache: z.boolean().default(true),
   validateResponse: z.boolean().default(true)
 });

@@ -9,7 +9,7 @@
  * - 6.4: Ensure citations reference actual content from chunks
  */
 
-import { RelevantChunk } from './ClaudeService';
+import { RelevantChunk } from './GptService';
 
 export interface ValidationResult {
   isComplete: boolean;

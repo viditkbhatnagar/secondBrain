@@ -1,6 +1,6 @@
 import { VectorService } from './VectorService';
 import { DatabaseService } from './DatabaseService';
-import { ClaudeService, RelevantChunk, SearchResult } from './ClaudeService';
+import { GptService, RelevantChunk, SearchResult } from './GptService';
 import { GraphService } from './GraphService';
 import { DocumentModel } from '../models/index';
 import { OpenAIService } from './OpenAIService';
@@ -243,7 +243,7 @@ export class AgentService {
     // Only clarify for very short or very broad questions
     if (question.trim().length < 10 || /^(explain|tell me about|info on|overview of)\s/i.test(question)) {
       try {
-        const cq = await ClaudeService.generateClarifyingQuestion(question);
+        const cq = await GptService.generateClarifyingQuestion(question);
         if (cq && cq.length > 0 && cq.length < 200) return cq;
       } catch {}
     }
@@ -327,7 +327,7 @@ export class AgentService {
     let effectiveQuery = question;
     if (config.useQueryExpansion) {
       try {
-        const expanded = await ClaudeService.expandQuery(question);
+        const expanded = await GptService.expandQuery(question);
         if (expanded !== question) {
           effectiveQuery = expanded;
           queryExpanded = true;
@@ -371,7 +371,7 @@ export class AgentService {
       });
       
       try {
-        const expandedQuery = await ClaudeService.expandQuery(question);
+        const expandedQuery = await GptService.expandQuery(question);
         if (expandedQuery !== question) {
           const expandedChunks = await VectorService.searchSimilarHybrid(expandedQuery, { 
             limit: effectiveLimit, 
@@ -445,7 +445,7 @@ export class AgentService {
   }
 
   /**
-   * Answer Agent: synthesizes answer from chunks with Claude.
+   * Answer Agent: synthesizes answer from chunks with GPT-5.
    * Now supports conversation history for follow-up questions
    * Falls back to OpenAI for general knowledge when no documents found
    */
@@ -480,7 +480,7 @@ export class AgentService {
         sources: []
       };
     }
-    return await ClaudeService.answerQuestion(question, chunks, conversationHistory);
+    return await GptService.answerQuestion(question, chunks, conversationHistory);
   }
 
   /**
@@ -500,7 +500,7 @@ export class AgentService {
     let queryResolved = false;
     
     if (conversationHistory && conversationHistory.length > 0) {
-      const { resolvedQuery, isFollowUp } = await ClaudeService.resolveFollowUpQuery(question, conversationHistory);
+      const { resolvedQuery, isFollowUp } = await GptService.resolveFollowUpQuery(question, conversationHistory);
       if (isFollowUp && resolvedQuery !== question) {
         effectiveQuestion = resolvedQuery;
         queryResolved = true;

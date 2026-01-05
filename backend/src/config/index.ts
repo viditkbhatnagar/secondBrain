@@ -20,7 +20,6 @@ const config = {
   },
   
   ai: {
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     openaiApiKey: process.env.OPENAI_API_KEY,
   },
   
@@ -47,7 +46,7 @@ const config = {
  * Validate required environment variables
  */
 export function validateConfig(): void {
-  const required: string[] = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'MONGODB_URI'];
+  const required: string[] = ['OPENAI_API_KEY', 'MONGODB_URI'];
   const missing: string[] = [];
   
   for (const key of required) {

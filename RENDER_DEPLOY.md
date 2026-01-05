@@ -36,7 +36,6 @@ Deploy your Personal Knowledge Base as **ONE web service** on Render - frontend 
    In the Render dashboard, add these secrets:
    ```
    MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/knowledge-base
-   ANTHROPIC_API_KEY=your_anthropic_key
    OPENAI_API_KEY=your_openai_key
    COHERE_API_KEY=your_cohere_key  # Optional but recommended
    ```
@@ -129,7 +128,6 @@ npm test
 ### Required
 ```bash
 MONGODB_URI=mongodb+srv://...
-ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 ```
 
