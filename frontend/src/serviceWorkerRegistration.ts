@@ -31,6 +31,17 @@ export function register(config?: Config): void {
       }
     });
 
+    // Listen for cache cleared message from service worker
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'CACHE_CLEARED') {
+        console.log('Cache cleared by service worker, reloading...');
+        // Small delay to ensure service worker is fully activated
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+      }
+    });
+
     // Listen for online/offline events
     window.addEventListener('online', () => {
       console.log('App is online');

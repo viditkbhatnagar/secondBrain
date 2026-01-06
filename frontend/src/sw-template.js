@@ -17,7 +17,8 @@ clientsClaim();
 // eslint-disable-next-line no-undef
 precacheAndRoute(self.__WB_MANIFEST);
 
-// App Shell routing
+// App Shell routing - handle navigation requests
+// Since index.html is excluded from precaching, we use NetworkFirst strategy
 const fileExtensionRegexp = new RegExp('/[^/?]+\\.[^/]+$');
 registerRoute(
   ({ request, url }) => {
@@ -26,7 +27,13 @@ registerRoute(
     if (url.pathname.match(fileExtensionRegexp)) return false;
     return true;
   },
-  createHandlerBoundToURL(process.env.PUBLIC_URL + '/index.html')
+  new NetworkFirst({
+    cacheName: 'html-cache',
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({ maxEntries: 1, maxAgeSeconds: 60 }), // Cache for 1 minute only
+    ],
+  })
 );
 
 // Static assets - Stale While Revalidate (always check for updates)
@@ -178,27 +185,36 @@ self.addEventListener('message', (event) => {
 
 // Activate new service worker immediately
 self.addEventListener('install', (event) => {
+  // Force immediate activation
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     Promise.all([
+      // Take control of all clients immediately
       self.clients.claim(),
-      // Clean up old caches
+      // Clean up ALL old caches on activation to prevent stale content
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
-            // Keep current version caches
-            if (!cacheName.startsWith('workbox-') && 
-                !['static-assets', 'images', 'fonts', 'api-documents', 'api-stats', 
-                  'api-health', 'api-search', 'api-threads'].includes(cacheName)) {
+            // Delete all caches except the current workbox precache
+            if (!cacheName.startsWith('workbox-precache')) {
+              console.log('Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
         );
       })
-    ])
+    ]).then(() => {
+      console.log('Service worker activated and caches cleaned');
+      // Force reload all clients to get fresh content
+      return self.clients.matchAll({ type: 'window' }).then(clients => {
+        clients.forEach(client => {
+          client.postMessage({ type: 'CACHE_CLEARED' });
+        });
+      });
+    })
   );
 });
 

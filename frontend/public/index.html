@@ -9,9 +9,12 @@
     <meta name="color-scheme" content="light dark" />
     
     <!-- Cache Control - Prevent HTML caching -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
+    
+    <!-- App Version for cache busting -->
+    <meta name="app-version" content="%REACT_APP_VERSION%" />
     <meta name="description" content="AI-powered personal knowledge base with semantic search, document management, and intelligent chat" />
     <meta name="keywords" content="knowledge base, AI search, document management, personal wiki, second brain, RAG" />
     
