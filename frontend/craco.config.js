@@ -20,7 +20,12 @@ module.exports = {
             swSrc: path.resolve(__dirname, 'src/sw-template.js'),
             swDest: 'service-worker.js',
             maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
-            exclude: [/\.map$/, /asset-manifest\.json$/, /LICENSE/],
+            exclude: [
+              /\.map$/,
+              /asset-manifest\.json$/,
+              /LICENSE/,
+              /index\.html$/, // Never precache index.html - always fetch fresh
+            ],
             dontCacheBustURLsMatching: /\.[0-9a-f]{8}\./,
           })
         );

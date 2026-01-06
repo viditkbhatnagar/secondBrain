@@ -29,14 +29,14 @@ registerRoute(
   createHandlerBoundToURL(process.env.PUBLIC_URL + '/index.html')
 );
 
-// Static assets - Cache First
+// Static assets - Stale While Revalidate (always check for updates)
 registerRoute(
   ({ request }) => request.destination === 'script' || request.destination === 'style',
-  new CacheFirst({
+  new StaleWhileRevalidate({
     cacheName: 'static-assets',
     plugins: [
       new CacheableResponsePlugin({ statuses: [0, 200] }),
-      new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 30 * 24 * 60 * 60 }),
+      new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 7 * 24 * 60 * 60 }), // 7 days
     ],
   })
 );
@@ -140,6 +140,66 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+  
+  // Handle cache clearing
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => caches.delete(cacheName))
+        ).then(() => {
+          return { success: true };
+        });
+      })
+    );
+  }
+  
+  // Handle cache size request
+  if (event.data && event.data.type === 'GET_CACHE_SIZE') {
+    event.waitUntil(
+      caches.keys().then(async (cacheNames) => {
+        let totalSize = 0;
+        for (const cacheName of cacheNames) {
+          const cache = await caches.open(cacheName);
+          const keys = await cache.keys();
+          for (const request of keys) {
+            const response = await cache.match(request);
+            if (response) {
+              const blob = await response.blob();
+              totalSize += blob.size;
+            }
+          }
+        }
+        return { size: totalSize };
+      })
+    );
+  }
+});
+
+// Activate new service worker immediately
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      // Clean up old caches
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            // Keep current version caches
+            if (!cacheName.startsWith('workbox-') && 
+                !['static-assets', 'images', 'fonts', 'api-documents', 'api-stats', 
+                  'api-health', 'api-search', 'api-threads'].includes(cacheName)) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+    ])
+  );
 });
 
 // Push notifications

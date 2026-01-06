@@ -16,15 +16,23 @@ const createRateLimitResponse = (code: string, message: string) => ({
 });
 
 // IPv6-compliant key generator - extract IP from request
+// Note: We don't use IP-based rate limiting in favor of session/user-based
+// This prevents IPv6 bypass issues
 const keyGenerator = (req: Request): string => {
-  // Try to get IP from headers (for proxies like Render)
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) {
-    const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0];
-    return ips.trim();
+  // Use session ID if available (most reliable)
+  const sessionId = req.headers['x-session-id'];
+  if (sessionId && typeof sessionId === 'string') {
+    return `session:${sessionId}`;
   }
-  // Fall back to socket IP
-  return req.ip || req.socket.remoteAddress || 'unknown';
+  
+  // Fall back to user-agent + IP combination for better tracking
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  const forwarded = req.headers['x-forwarded-for'];
+  const ip = forwarded 
+    ? (Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0]).trim()
+    : (req.ip || req.socket.remoteAddress || 'unknown');
+  
+  return `${ip}:${userAgent.substring(0, 50)}`;
 };
 
 // Log rate limit hits

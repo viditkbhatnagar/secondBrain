@@ -1,62 +1,42 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
-import {
-  Search, MessageSquare, Upload, Eye, Trash2,
-  AlertCircle, Clock, ChevronRight
-} from 'lucide-react';
+import { Upload, Clock, FileText, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/Card';
-import { analyticsApi } from '../../services/analyticsApi';
+import { API_ENDPOINTS } from '../../config/api';
 
-interface ActivityEvent {
-  type: string;
-  timestamp: string;
-  metadata: any;
+interface Document {
+  id: string;
+  filename: string;
+  originalName: string;
+  uploadedAt: string;
+  wordCount: number;
+  chunkCount: number;
+  fileSize?: number;
 }
 
-const eventIcons: Record<string, any> = {
-  search: { icon: Search, color: 'text-primary-500', bg: 'bg-primary-100 dark:bg-primary-900/30' },
-  chat_message: { icon: MessageSquare, color: 'text-success-500', bg: 'bg-success-100 dark:bg-success-900/30' },
-  document_upload: { icon: Upload, color: 'text-warning-500', bg: 'bg-warning-100 dark:bg-warning-900/30' },
-  document_view: { icon: Eye, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-  document_delete: { icon: Trash2, color: 'text-danger-500', bg: 'bg-danger-100 dark:bg-danger-900/30' },
-  error: { icon: AlertCircle, color: 'text-danger-500', bg: 'bg-danger-100 dark:bg-danger-900/30' }
-};
-
-const getEventDescription = (event: ActivityEvent): string => {
-  switch (event.type) {
-    case 'search':
-      return `Searched: "${event.metadata?.query?.slice(0, 50) || 'Unknown'}${event.metadata?.query?.length > 50 ? '...' : ''}"`;
-    case 'chat_message':
-      return 'Sent a chat message';
-    case 'document_upload':
-      return `Uploaded: ${event.metadata?.documentName || 'document'}`;
-    case 'document_view':
-      return `Viewed: ${event.metadata?.documentName || 'document'}`;
-    case 'document_delete':
-      return `Deleted: ${event.metadata?.documentName || 'document'}`;
-    case 'error':
-      return `Error: ${event.metadata?.errorType || 'Unknown error'}`;
-    default:
-      return event.type;
-  }
-};
-
 export function RecentActivity(): JSX.Element {
-  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     
-    const fetchEvents = async () => {
+    const fetchDocuments = async () => {
       try {
-        const data = await analyticsApi.getRealTime();
-        if (mounted) {
-          setEvents(data.recentEvents || []);
+        const response = await fetch(API_ENDPOINTS.documents);
+        if (response.ok) {
+          const data = await response.json();
+          if (mounted) {
+            // Sort by upload date (newest first)
+            const sorted = [...data].sort((a, b) => 
+              new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+            );
+            setDocuments(sorted);
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch recent activity:', error);
+        console.error('Failed to fetch documents:', error);
       } finally {
         if (mounted) {
           setIsLoading(false);
@@ -64,32 +44,39 @@ export function RecentActivity(): JSX.Element {
       }
     };
 
-    fetchEvents();
-    // Refresh every 60 seconds instead of 10 to reduce load
-    const interval = setInterval(fetchEvents, 60000);
+    fetchDocuments();
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchDocuments, 60000);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
   }, []);
 
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes) return 'N/A';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <Card className="h-full">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-primary-500" />
+            <Upload className="w-5 h-5 text-warning-500" />
             <h3 className="text-lg font-semibold text-secondary-900 dark:text-white">
-              Recent Activity
+              Recent Uploads
             </h3>
           </div>
-          <span className="text-xs text-secondary-400">Last 5 minutes</span>
+          <span className="text-xs text-secondary-400">{documents.length} documents</span>
         </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <div className="space-y-3">
-            {[1, 2, 3].map(i => (
+            {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="animate-pulse flex items-center gap-3">
                 <div className="w-8 h-8 bg-secondary-200 dark:bg-secondary-700 rounded-lg" />
                 <div className="flex-1">
@@ -99,42 +86,47 @@ export function RecentActivity(): JSX.Element {
               </div>
             ))}
           </div>
-        ) : events.length === 0 ? (
+        ) : documents.length === 0 ? (
           <div className="text-center py-8 text-secondary-400">
-            <Clock className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>No recent activity</p>
+            <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p>No documents uploaded yet</p>
           </div>
         ) : (
-          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
             <AnimatePresence mode="popLayout">
-              {events.map((event, index) => {
-                const eventConfig = eventIcons[event.type] || eventIcons.search;
-                const Icon = eventConfig.icon;
-
-                return (
-                  <motion.div
-                    key={`${event.timestamp}-${index}`}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary-50 dark:hover:bg-secondary-800/50 transition-colors group"
-                  >
-                    <div className={`w-8 h-8 rounded-lg ${eventConfig.bg} flex items-center justify-center`}>
-                      <Icon className={`w-4 h-4 ${eventConfig.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-secondary-700 dark:text-secondary-300 truncate">
-                        {getEventDescription(event)}
-                      </p>
+              {documents.map((doc, index) => (
+                <motion.div
+                  key={doc.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary-50 dark:hover:bg-secondary-800/50 transition-colors group border border-transparent hover:border-secondary-200 dark:hover:border-secondary-700"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-warning-100 dark:bg-warning-900/30 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-warning-600 dark:text-warning-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-secondary-900 dark:text-secondary-100 truncate">
+                      {doc.originalName}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
                       <p className="text-xs text-secondary-400">
-                        {formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}
+                        {formatDistanceToNow(new Date(doc.uploadedAt), { addSuffix: true })}
+                      </p>
+                      <span className="text-xs text-secondary-300">•</span>
+                      <p className="text-xs text-secondary-400">
+                        {formatFileSize(doc.fileSize)}
+                      </p>
+                      <span className="text-xs text-secondary-300">•</span>
+                      <p className="text-xs text-secondary-400">
+                        {doc.chunkCount} chunks
                       </p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-secondary-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </motion.div>
-                );
-              })}
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-secondary-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                </motion.div>
+              ))}
             </AnimatePresence>
           </div>
         )}

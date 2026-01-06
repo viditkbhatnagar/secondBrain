@@ -11,6 +11,7 @@ interface StatsCardProps {
   trend?: number;
   suffix?: string;
   prefix?: string;
+  decimals?: number;
   color?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info';
   size?: 'sm' | 'md' | 'lg';
   description?: string;
@@ -56,6 +57,7 @@ export function StatsCard({
   trend,
   suffix = '',
   prefix = '',
+  decimals,
   color = 'primary',
   size = 'md',
   description
@@ -92,7 +94,7 @@ export function StatsCard({
                   end={value}
                   duration={1.5}
                   separator=","
-                  decimals={suffix === '%' && value % 1 !== 0 ? 1 : 0}
+                  decimals={decimals !== undefined ? decimals : (suffix === '%' && value % 1 !== 0 ? 1 : 0)}
                 />
                 {suffix}
               </span>

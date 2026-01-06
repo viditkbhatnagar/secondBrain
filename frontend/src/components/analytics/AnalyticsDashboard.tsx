@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Search,
   MessageSquare,
-  Upload,
+  DollarSign,
   FileText,
   Clock,
   Target,
@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '../ui/Card';
 import { StatsCard } from './StatsCard';
-import { RealTimeStats } from './RealTimeStats';
 import { TopDocumentsList } from './TopDocumentsList';
 import { RecentActivity } from './RecentActivity';
 import { ActivityChart } from './charts/ActivityChart';
@@ -33,6 +32,21 @@ const timeRanges = [
 
 // Auto-refresh interval in milliseconds (30 seconds)
 const AUTO_REFRESH_INTERVAL = 30000;
+
+// GPT-5 Pricing (per 1M tokens)
+const GPT5_INPUT_COST = 1.25;   // $1.25 per 1M input tokens
+const GPT5_OUTPUT_COST = 10.00;  // $10.00 per 1M output tokens
+
+// Calculate API cost from tokens (assuming 70% input, 30% output mix)
+const calculateApiCost = (totalTokens: number): number => {
+  const inputTokens = totalTokens * 0.7;
+  const outputTokens = totalTokens * 0.3;
+  
+  const inputCost = (inputTokens / 1000000) * GPT5_INPUT_COST;
+  const outputCost = (outputTokens / 1000000) * GPT5_OUTPUT_COST;
+  
+  return inputCost + outputCost;
+};
 
 export function AnalyticsDashboard(): JSX.Element {
   const [days, setDays] = useState(30);
@@ -165,10 +179,11 @@ export function AnalyticsDashboard(): JSX.Element {
           color="success"
         />
         <StatsCard
-          title="Documents Uploaded"
-          value={overview?.totalUploads ?? 0}
-          icon={Upload}
-          trend={overview?.trends.uploads}
+          title="API Cost"
+          value={calculateApiCost(overview?.totalTokensUsed ?? 0)}
+          icon={DollarSign}
+          prefix="$"
+          decimals={2}
           color="warning"
         />
         <StatsCard
@@ -212,9 +227,6 @@ export function AnalyticsDashboard(): JSX.Element {
           size="sm"
         />
       </div>
-
-      {/* Real-time Stats */}
-      <RealTimeStats />
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

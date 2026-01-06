@@ -69,12 +69,12 @@ type ActiveTab = 'upload' | 'library' | 'classified' | 'clusters' | 'chat' | 'an
 type ViewState = 'landing' | 'login' | 'dashboard';
 
 // All navigation items with access control
-const allTabs: { id: ActiveTab; label: string; icon: React.ReactNode; adminOnly: boolean }[] = [
+const allTabs: { id: ActiveTab; label: string; icon: React.ReactNode; adminOnly: boolean; hidden?: boolean }[] = [
   { id: 'chat', label: 'Chat', icon: <MessageSquare className="h-4 w-4" />, adminOnly: false },
   { id: 'library', label: 'Library', icon: <Library className="h-4 w-4" />, adminOnly: false },
   { id: 'upload', label: 'Upload', icon: <Upload className="h-4 w-4" />, adminOnly: true },
-  { id: 'classified', label: 'Classified', icon: <Library className="h-4 w-4" />, adminOnly: true },
-  { id: 'clusters', label: 'Clusters', icon: <Layers className="h-4 w-4" />, adminOnly: true },
+  { id: 'classified', label: 'Classified', icon: <Library className="h-4 w-4" />, adminOnly: true, hidden: true },
+  { id: 'clusters', label: 'Clusters', icon: <Layers className="h-4 w-4" />, adminOnly: true, hidden: true },
   { id: 'analytics', label: 'Analytics', icon: <BarChart2 className="h-4 w-4" />, adminOnly: true },
 ];
 
@@ -104,9 +104,11 @@ function AppContent() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
 
-  // Filter tabs based on role
+  // Filter tabs based on role and visibility
   const tabs = useMemo(() => {
-    return isAdmin ? allTabs : allTabs.filter(tab => !tab.adminOnly);
+    return isAdmin 
+      ? allTabs.filter(tab => !tab.hidden)
+      : allTabs.filter(tab => !tab.adminOnly && !tab.hidden);
   }, [isAdmin]);
 
   // Handle browser back/forward buttons
