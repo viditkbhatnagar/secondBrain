@@ -5,9 +5,10 @@ import { ThemeToggle } from './ui';
 
 interface LandingPageProps {
   onGetStarted: () => void;
+  onAdminLogin: () => void;
 }
 
-export function LandingPage({ onGetStarted }: LandingPageProps) {
+export function LandingPage({ onGetStarted, onAdminLogin }: LandingPageProps) {
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/50 to-violet-50/30 dark:from-secondary-900 dark:via-secondary-900 dark:to-secondary-800 relative">
       <Spotlight
@@ -34,7 +35,37 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
               Second Brain
             </span>
           </div>
-          <ThemeToggle />
+          
+          {/* Right side - Admin Login + Theme Toggle */}
+          <div className="flex items-center gap-3">
+            {/* Glossy Admin Login Button */}
+            <button
+              onClick={onAdminLogin}
+              className="group relative px-4 py-2 rounded-xl font-medium text-sm transition-all duration-300 hover:-translate-y-0.5 hover:scale-105 overflow-hidden bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border border-white/50 dark:border-slate-700/50"
+              style={{
+                boxShadow: `
+                  0 2px 10px -2px rgba(0, 0, 0, 0.1),
+                  0 4px 20px -4px rgba(59, 130, 246, 0.15),
+                  inset 0 1px 0 0 rgba(255, 255, 255, 0.8),
+                  inset 0 -1px 0 0 rgba(0, 0, 0, 0.05)
+                `
+              }}
+            >
+              {/* Glossy shine overlay - top highlight */}
+              <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/70 dark:from-white/20 via-white/30 dark:via-white/5 to-transparent rounded-t-xl pointer-events-none" />
+              {/* Rainbow reflection on hover */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 rounded-xl pointer-events-none" />
+              {/* Edge highlight */}
+              <div className="absolute inset-y-1 left-0 w-[1px] bg-gradient-to-b from-transparent via-white/60 dark:via-white/20 to-transparent pointer-events-none" />
+              <span className="relative z-10 text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Admin
+              </span>
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -110,7 +141,7 @@ export function LandingPage({ onGetStarted }: LandingPageProps) {
                 <div className="mt-6">
                   <button
                     onClick={onGetStarted}
-                    className="group inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+                    className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold rounded-xl transition-all duration-200 hover:-translate-y-0.5"
                     style={{
                       boxShadow: '0 4px 14px -3px rgba(59, 130, 246, 0.5), 0 8px 20px -6px rgba(59, 130, 246, 0.4), inset 0 1px 0 0 rgba(255,255,255,0.2)'
                     }}

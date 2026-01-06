@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -31,14 +31,19 @@ const timeRanges = [
   { label: '90 days', value: 90 }
 ];
 
+// Auto-refresh interval in milliseconds (30 seconds)
+const AUTO_REFRESH_INTERVAL = 30000;
+
 export function AnalyticsDashboard(): JSX.Element {
   const [days, setDays] = useState(30);
   const [overview, setOverview] = useState<OverviewStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchOverview = useCallback(async () => {
-    setIsLoading(true);
+  const fetchOverview = useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
     try {
       const data = await analyticsApi.getOverview(days);
       setOverview(data);
@@ -46,19 +51,35 @@ export function AnalyticsDashboard(): JSX.Element {
     } catch (error) {
       console.error('Failed to fetch overview:', error);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   }, [days]);
 
+  // Initial fetch and auto-refresh setup
   useEffect(() => {
     fetchOverview();
-  }, [fetchOverview]);
+    
+    // Set up auto-refresh interval
+    if (autoRefresh) {
+      refreshIntervalRef.current = setInterval(() => {
+        fetchOverview(false); // Don't show loading spinner for auto-refresh
+      }, AUTO_REFRESH_INTERVAL);
+    }
+    
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [fetchOverview, autoRefresh]);
 
   const handleRefresh = () => {
     fetchOverview();
   };
 
-  return (
+  const toggleAutoRefresh = () => {
+    setAutoRefresh(prev => !prev);
+  };  return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -89,6 +110,19 @@ export function AnalyticsDashboard(): JSX.Element {
             ))}
           </div>
 
+          {/* Auto-refresh Toggle */}
+          <button
+            onClick={toggleAutoRefresh}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+              autoRefresh
+                ? 'bg-success-100 dark:bg-success-900/30 text-success-600 dark:text-success-400'
+                : 'bg-secondary-100 dark:bg-secondary-800 text-secondary-500'
+            }`}
+            title={autoRefresh ? 'Auto-refresh ON (30s)' : 'Auto-refresh OFF'}
+          >
+            {autoRefresh ? 'Live' : 'Paused'}
+          </button>
+
           {/* Refresh Button */}
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -106,6 +140,12 @@ export function AnalyticsDashboard(): JSX.Element {
       <div className="flex items-center gap-2 text-xs text-secondary-400">
         <Calendar className="w-3 h-3" />
         <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+        {autoRefresh && (
+          <span className="ml-2 flex items-center gap-1">
+            <span className="w-2 h-2 bg-success-500 rounded-full animate-pulse" />
+            <span>Auto-refreshing every 30s</span>
+          </span>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -151,7 +191,7 @@ export function AnalyticsDashboard(): JSX.Element {
         />
         <StatsCard
           title="Avg Confidence"
-          value={(overview?.avgConfidence ?? 0) * 100}
+          value={overview?.avgConfidence ?? 0}
           icon={Target}
           suffix="%"
           color="success"

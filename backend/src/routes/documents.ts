@@ -1,6 +1,7 @@
 import express from 'express';
 import { DatabaseService } from '../services/DatabaseService';
 import { VectorService } from '../services/VectorService';
+import { analyticsService } from '../services/AnalyticsService';
 import { cacheStats, invalidateDocumentCaches } from '../middleware/cacheMiddleware';
 import { invalidateAllCaches } from '../utils/cache';
 
@@ -329,6 +330,13 @@ documentsRouter.get('/:id', async (req, res) => {
     if (!document) {
       return res.status(404).json({ error: 'Document not found' });
     }
+    
+    // Track document view for analytics
+    const sessionId = req.headers['x-session-id'] as string || 'anonymous';
+    await analyticsService.trackEvent('document_view', sessionId, {
+      documentId: document.id,
+      documentName: document.originalName
+    });
     
     res.json(document);
   } catch (error) {

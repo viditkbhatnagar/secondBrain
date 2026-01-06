@@ -37,6 +37,7 @@ interface FastRAGResponse {
   confidence: number;
   responseTime: number;
   cached: boolean;
+  tokensUsed: number;
   metadata: {
     fromCache: boolean;
     cacheLayer?: 'hot' | 'memory' | 'redis' | 'none';
@@ -72,6 +73,7 @@ export class UltraFastRAGService {
             ...cached,
             responseTime: Date.now() - startTime,
             cached: true,
+            tokensUsed: cached.tokensUsed || 0,
             metadata: {
               ...cached.metadata,
               fromCache: true,
@@ -110,6 +112,7 @@ export class UltraFastRAGService {
           confidence: 0,
           responseTime: Date.now() - startTime,
           cached: false,
+          tokensUsed: 0,
           metadata: {
             fromCache: false,
             cacheLayer: 'none',
@@ -144,7 +147,7 @@ export class UltraFastRAGService {
 
       // Generate answer with full context (maximum accuracy)
       const llmStart = Date.now();
-      const answer = await this.generateFastAnswer(query, topSources);
+      const { answer, tokensUsed } = await this.generateFastAnswer(query, topSources);
       const llmTime = Date.now() - llmStart;
 
       // Calculate confidence
@@ -156,6 +159,7 @@ export class UltraFastRAGService {
         confidence,
         responseTime: Date.now() - startTime,
         cached: false,
+        tokensUsed,
         metadata: {
           fromCache: false,
           cacheLayer: 'none',
@@ -191,7 +195,7 @@ export class UltraFastRAGService {
   private async generateFastAnswer(
     query: string,
     chunks: RelevantChunk[]
-  ): Promise<string> {
+  ): Promise<{ answer: string; tokensUsed: number }> {
     // Build full context - no truncation for maximum accuracy
     const context = chunks
       .map((chunk, idx) => `[Source ${idx + 1}] ${chunk.content}`)
@@ -227,13 +231,15 @@ export class UltraFastRAGService {
       });
 
       const answer = response.choices[0]?.message?.content?.trim() || 'Unable to generate answer.';
+      const tokensUsed = response.usage?.total_tokens || 0;
       
       logger.debug('GPT-5 Response', { 
         answer: answer.substring(0, 200),
-        finishReason: response.choices[0]?.finish_reason 
+        finishReason: response.choices[0]?.finish_reason,
+        tokensUsed
       });
 
-      return answer;
+      return { answer, tokensUsed };
     } catch (error: any) {
       logger.error('Fast answer generation failed:', error);
       throw new Error('Failed to generate answer');

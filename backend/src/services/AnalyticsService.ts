@@ -107,7 +107,7 @@ class AnalyticsService {
           totalErrors: { $sum: { $cond: [{ $eq: ['$eventType', 'error'] }, 1, 0] } },
           avgResponseTime: { $avg: '$metadata.responseTime' },
           avgConfidence: { $avg: '$metadata.confidence' },
-          totalTokensUsed: { $sum: '$metadata.tokensUsed' },
+          totalTokensUsed: { $sum: { $ifNull: ['$metadata.tokensUsed', 0] } },
           uniqueSessions: { $addToSet: '$sessionId' },
           totalEvents: { $sum: 1 }
         }
@@ -328,7 +328,7 @@ class AnalyticsService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    return AnalyticsEvent.aggregate([
+    const analyticsData = await AnalyticsEvent.aggregate([
       {
         $match: {
           eventType: { $in: ['document_view', 'search'] },
@@ -356,6 +356,24 @@ class AnalyticsService {
         }
       }
     ]);
+
+    // If no analytics data, fall back to documents from the database
+    if (analyticsData.length === 0) {
+      const documents = await DocumentModel.find({})
+        .sort({ uploadedAt: -1 })
+        .limit(limit)
+        .select('id originalName chunkCount')
+        .lean();
+
+      return documents.map((doc: any) => ({
+        documentId: doc.id,
+        documentName: doc.originalName,
+        views: doc.chunkCount || 0, // Use chunk count as a proxy for "activity"
+        searches: 0
+      }));
+    }
+
+    return analyticsData;
   }
 
   // Get hourly activity heatmap data
@@ -399,7 +417,7 @@ class AnalyticsService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    return AnalyticsEvent.aggregate([
+    const analyticsData = await AnalyticsEvent.aggregate([
       {
         $match: {
           eventType: 'document_upload',
@@ -424,6 +442,44 @@ class AnalyticsService {
       },
       { $sort: { count: -1 } }
     ]);
+
+    // If no analytics data, fall back to documents from the database
+    if (analyticsData.length === 0) {
+      const documents = await DocumentModel.aggregate([
+        {
+          $addFields: {
+            fileType: {
+              $toLower: {
+                $arrayElemAt: [
+                  { $split: ['$originalName', '.'] },
+                  -1
+                ]
+              }
+            }
+          }
+        },
+        {
+          $group: {
+            _id: '$fileType',
+            count: { $sum: 1 },
+            totalSize: { $sum: '$fileSize' }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            type: '$_id',
+            count: 1,
+            totalSize: { $ifNull: ['$totalSize', 0] }
+          }
+        },
+        { $sort: { count: -1 } }
+      ]);
+
+      return documents;
+    }
+
+    return analyticsData;
   }
 
   // Get response time percentiles

@@ -87,6 +87,9 @@ export {
 // Page Loader
 export { default as PageLoader } from './PageLoader';
 
+// Box Loader
+export { default as BoxLoader } from './BoxLoader';
+
 // Spotlight Component
 export { Spotlight } from './spotlight';
 

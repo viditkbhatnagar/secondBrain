@@ -16,6 +16,7 @@ export interface GeneralAnswer {
   answer: string;
   isGeneralKnowledge: boolean;
   model: string;
+  tokensUsed?: number;
 }
 
 export class OpenAIService {
@@ -91,6 +92,7 @@ FORMATTING RULES:
       });
 
       let answer = response.choices[0]?.message?.content || 'I apologize, but I was unable to generate a response.';
+      const tokensUsed = response.usage?.total_tokens || 0;
       
       // Clean up any markdown that slipped through
       answer = answer
@@ -103,7 +105,8 @@ FORMATTING RULES:
       return {
         answer,
         isGeneralKnowledge: true,
-        model: this.model
+        model: this.model,
+        tokensUsed
       };
     } catch (error: any) {
       console.error('OpenAI API error:', error);

@@ -111,9 +111,14 @@ fileUploadRouter.post('/', async (req, res) => {
 
     // Track analytics event
     const sessionId = req.headers['x-session-id'] as string || 'anonymous';
+    
+    // Extract file extension for fileType
+    const fileExtension = originalname.split('.').pop()?.toLowerCase() || 'unknown';
+    
     await analyticsService.trackEvent('document_upload', sessionId, {
       documentId: documentRecord.id,
       documentName: documentRecord.originalName,
+      fileType: fileExtension,
       fileSize: req.file.size,
       wordCount: documentRecord.wordCount,
       chunkCount: documentRecord.chunkCount,

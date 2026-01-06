@@ -368,7 +368,7 @@ export const ChatPage: React.FC = () => {
   const showWelcome = messages.length === 0 && !activeThreadId && !thinkingStage;
 
   return (
-    <div className="flex h-[calc(100vh-180px)] bg-secondary-50 dark:bg-secondary-950 rounded-xl overflow-hidden border border-secondary-200 dark:border-secondary-800 shadow-sm">
+    <div className="flex h-[calc(100vh-140px)] -mx-4 lg:-mx-8 -mt-8 -mb-8 overflow-hidden">
       {/* Mobile sidebar toggle */}
       <button
         onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
@@ -382,7 +382,7 @@ export const ChatPage: React.FC = () => {
       </button>
 
       {/* Sidebar - Desktop */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block border-r border-secondary-200 dark:border-secondary-800">
         <ThreadSidebar
           threads={threads}
           activeThreadId={activeThreadId}
@@ -416,12 +416,12 @@ export const ChatPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-gradient-to-b from-white to-secondary-50 dark:from-secondary-900 dark:to-secondary-950">
+      <div className="flex-1 flex flex-col bg-white dark:bg-secondary-900">
         {/* Messages */}
         <div
           ref={messagesContainerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-thin"
+          className="flex-1 overflow-y-auto scrollbar-thin"
         >
           {showWelcome ? (
             <WelcomeState
@@ -429,7 +429,7 @@ export const ChatPage: React.FC = () => {
               documentCount={documentCount}
             />
           ) : (
-            <div className="max-w-3xl mx-auto space-y-6">
+            <div className="max-w-3xl mx-auto px-4 lg:px-6 py-6 space-y-6">
               {messages.map((message, idx) => (
                 <div key={idx} className="group">
                   <MessageBubble

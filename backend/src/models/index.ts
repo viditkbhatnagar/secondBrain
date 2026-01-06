@@ -268,6 +268,7 @@ export const connectDB = async (): Promise<void> => {
     const mongoUri = process.env.MONGODB_URI;
     
     console.log('🔍 Checking MongoDB URI...');
+    console.log('🔍 Raw MONGODB_URI value:', mongoUri ? `${mongoUri.substring(0, 30)}...` : 'undefined');
     
     if (!mongoUri) {
       throw new Error('MONGODB_URI is required in environment variables');

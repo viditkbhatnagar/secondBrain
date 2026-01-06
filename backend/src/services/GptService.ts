@@ -9,6 +9,7 @@ export interface SearchResult {
   relevantChunks: RelevantChunk[];
   confidence: number;
   sources: string[];
+  tokensUsed?: number;
 }
 
 export interface RelevantChunk {
@@ -236,6 +237,8 @@ Return ONLY the rewritten question, nothing else.`;
     });
 
     const answer = response.choices[0]?.message?.content || '';
+    const tokensUsed = response.usage?.total_tokens || 0;
+    
     if (!answer.trim()) {
       throw new Error('Empty response received from OpenAI API');
     }
@@ -250,6 +253,7 @@ Return ONLY the rewritten question, nothing else.`;
       relevantChunks: orderedChunks,
       confidence,
       sources,
+      tokensUsed,
     };
   }
 

@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { Document } from '../App';
 import { API_ENDPOINTS } from '../config/api';
-import { Button, Card } from './ui';
+import { Button, Card, BoxLoader } from './ui';
 
 interface FileUploadProps {
   onFileUploaded: (document: Document) => void;
@@ -235,15 +235,15 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileUploaded }) => {
             {uploadStatus.status === 'error' && <AlertCircle className="h-5 w-5 text-danger-500 flex-shrink-0" />}
             <div className="ml-3 flex-1">
               {uploadStatus.status === 'uploading' && (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-600 border-t-transparent mr-2" />
+                <div className="flex items-center gap-4">
+                  <BoxLoader />
                   <p className="font-medium text-primary-700 dark:text-primary-300">Uploading file...</p>
                 </div>
               )}
               
               {uploadStatus.status === 'processing' && (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-600 border-t-transparent mr-2" />
+                <div className="flex items-center gap-4">
+                  <BoxLoader />
                   <p className="font-medium text-primary-700 dark:text-primary-300">Processing document and generating embeddings...</p>
                 </div>
               )}

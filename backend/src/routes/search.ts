@@ -785,16 +785,28 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
         await DatabaseService.logSearchQuery(query, 0, 70, 0);
         await DatabaseService.addMessage(tid, 'assistant', fullResult.answer, { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: true, fallbackReason: 'no_documents' } }, trace);
         
-        // Track chat message analytics
+        // Track chat message analytics with token usage
         const sessionId = req.headers['x-session-id'] as string || req.ip || 'anonymous';
+        const tokensUsed = fullResult.tokensUsed || 0;
+        
         await analyticsService.trackEvent('chat_message', sessionId, {
           threadId: tid,
           query: query.substring(0, 200),
           resultsCount: 0,
           confidence: 70,
           isFollowUp,
-          isGeneralKnowledge: true
+          isGeneralKnowledge: true,
+          tokensUsed
         });
+        
+        // Track ai_response for token aggregation
+        if (tokensUsed > 0) {
+          await analyticsService.trackEvent('ai_response', sessionId, {
+            tokensUsed,
+            query: query.substring(0, 200),
+            confidence: 70
+          });
+        }
         
         send('done', { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: true, confidence: 70 }, agentTrace: trace });
         res.end();
@@ -836,8 +848,10 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
           } 
         }, trace);
         
-        // Track chat message analytics
+        // Track chat message analytics with token usage
         const sessionId = req.headers['x-session-id'] as string || req.ip || 'anonymous';
+        const tokensUsed = fullResult.tokensUsed || 0;
+        
         await analyticsService.trackEvent('chat_message', sessionId, {
           threadId: tid,
           query: query.substring(0, 200),
@@ -845,8 +859,18 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
           confidence: 70,
           isFollowUp,
           isGeneralKnowledge: true,
-          originalConfidence: result.confidence
+          originalConfidence: result.confidence,
+          tokensUsed
         });
+        
+        // Track ai_response for token aggregation
+        if (tokensUsed > 0) {
+          await analyticsService.trackEvent('ai_response', sessionId, {
+            tokensUsed,
+            query: query.substring(0, 200),
+            confidence: 70
+          });
+        }
         
         send('done', { 
           metadata: { 
@@ -880,15 +904,27 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     await DatabaseService.logSearchQuery(query, allChunks.length, result.confidence, 0);
     await DatabaseService.addMessage(tid, 'assistant', result.answer, { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: false } }, trace);
     
-    // Track chat message analytics
+    // Track chat message analytics with token usage
     const sessionId = req.headers['x-session-id'] as string || req.ip || 'anonymous';
+    const tokensUsed = (result as any).tokensUsed || 0;
+    
     await analyticsService.trackEvent('chat_message', sessionId, {
       threadId: tid,
       query: query.substring(0, 200),
       resultsCount: allChunks.length,
       confidence: result.confidence,
-      isFollowUp
+      isFollowUp,
+      tokensUsed
     });
+    
+    // Also track ai_response for token aggregation
+    if (tokensUsed > 0) {
+      await analyticsService.trackEvent('ai_response', sessionId, {
+        tokensUsed,
+        query: query.substring(0, 200),
+        confidence: result.confidence
+      });
+    }
     
     send('done', { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: false, confidence: result.confidence }, agentTrace: trace });
     res.end();

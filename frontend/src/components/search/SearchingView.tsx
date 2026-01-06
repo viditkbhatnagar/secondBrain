@@ -1,10 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { AIThinkingAnimation } from './AIThinkingAnimation';
 import { ProgressStages } from './ProgressStages';
 import { SearchStage } from './types';
-import { Button } from '../ui';
+import { Button, BoxLoader } from '../ui';
 
 interface SearchingViewProps {
   query: string;
@@ -30,14 +29,14 @@ export const SearchingView: React.FC<SearchingViewProps> = ({
       className="py-12 bg-gradient-to-br from-white via-primary-50/30 to-white dark:from-secondary-900 dark:via-primary-950/30 dark:to-secondary-900"
     >
       <div className="w-full max-w-2xl mx-auto px-4">
-        {/* AI Animation */}
+        {/* Box Loader Animation */}
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.5 }}
           className="mb-8"
         >
-          <AIThinkingAnimation />
+          <BoxLoader />
         </motion.div>
 
         {/* Query Display */}

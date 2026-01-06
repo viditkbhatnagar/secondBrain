@@ -579,3 +579,213 @@
     @apply shadow-none border border-secondary-300;
   }
 }
+
+
+/* ============================================
+   Premium 3D Isometric Box Loader
+   ============================================ */
+@keyframes box1 {
+  0%, 50% {
+    transform: translate(100%, 0);
+  }
+  100% {
+    transform: translate(200%, 0);
+  }
+}
+
+@keyframes box2 {
+  0% {
+    transform: translate(0, 100%);
+  }
+  50% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(100%, 0);
+  }
+}
+
+@keyframes box3 {
+  0%, 50% {
+    transform: translate(100%, 100%);
+  }
+  100% {
+    transform: translate(0, 100%);
+  }
+}
+
+@keyframes box4 {
+  0% {
+    transform: translate(200%, 0);
+  }
+  50% {
+    transform: translate(200%, 100%);
+  }
+  100% {
+    transform: translate(100%, 100%);
+  }
+}
+
+/* Box loader wrapper with reflection */
+.box-loader-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.boxes {
+  --size: 32px;
+  --duration: 800ms;
+  height: calc(var(--size) * 2);
+  width: calc(var(--size) * 3);
+  position: relative;
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+  transform: rotateX(60deg) rotateZ(45deg) rotateY(0deg) translateZ(0px);
+}
+
+.boxes .box {
+  width: var(--size);
+  height: var(--size);
+  top: 0;
+  left: 0;
+  position: absolute;
+  transform-style: preserve-3d;
+}
+
+.boxes .box:nth-child(1) {
+  transform: translate(100%, 0);
+  animation: box1 var(--duration) linear infinite;
+}
+
+.boxes .box:nth-child(2) {
+  transform: translate(0, 100%);
+  animation: box2 var(--duration) linear infinite;
+}
+
+.boxes .box:nth-child(3) {
+  transform: translate(100%, 100%);
+  animation: box3 var(--duration) linear infinite;
+}
+
+.boxes .box:nth-child(4) {
+  transform: translate(200%, 0);
+  animation: box4 var(--duration) linear infinite;
+}
+
+.boxes .box .face {
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+}
+
+/* ============================================
+   Light Mode - Clean White/Gray 3D Cubes
+   ============================================ */
+
+/* Top face - Brightest (light source from above) */
+.boxes .box .face.face-top {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  transform: rotateX(90deg) translateZ(calc(var(--size) / 2));
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Front face - Medium brightness */
+.boxes .box .face.face-front {
+  background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+  transform: rotateY(0deg) translateZ(calc(var(--size) / 2));
+  border-left: 1px solid rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Right face - Darkest (shadow side) */
+.boxes .box .face.face-right {
+  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+  transform: rotateY(90deg) translateZ(calc(var(--size) / 2));
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+/* Back face - Hidden but needed for depth */
+.boxes .box .face.face-back {
+  background: #94a3b8;
+  transform: rotateY(180deg) translateZ(calc(var(--size) / 2));
+}
+
+/* Shadow/Reflection element */
+.boxes-shadow {
+  --size: 32px;
+  width: calc(var(--size) * 3);
+  height: calc(var(--size) * 2);
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(60deg) rotateZ(45deg) rotateY(0deg) translateZ(0px) scale(1, -0.6);
+  opacity: 0.15;
+  filter: blur(3px);
+  margin-top: -10px;
+}
+
+.boxes-shadow .box {
+  width: var(--size);
+  height: var(--size);
+  top: 0;
+  left: 0;
+  position: absolute;
+  background: #000;
+}
+
+.boxes-shadow .box:nth-child(1) {
+  transform: translate(100%, 0);
+  animation: box1 800ms linear infinite;
+}
+
+.boxes-shadow .box:nth-child(2) {
+  transform: translate(0, 100%);
+  animation: box2 800ms linear infinite;
+}
+
+.boxes-shadow .box:nth-child(3) {
+  transform: translate(100%, 100%);
+  animation: box3 800ms linear infinite;
+}
+
+.boxes-shadow .box:nth-child(4) {
+  transform: translate(200%, 0);
+  animation: box4 800ms linear infinite;
+}
+
+/* ============================================
+   Dark Mode - Premium Dark Theme
+   ============================================ */
+
+/* Dark mode top face - Brightest */
+.dark .boxes .box .face.face-top {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Dark mode front face - Medium */
+.dark .boxes .box .face.face-front {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode right face - Darkest */
+.dark .boxes .box .face.face-right {
+  background: linear-gradient(180deg, #64748b 0%, #475569 100%);
+  border-right: 1px solid rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+/* Dark mode back face */
+.dark .boxes .box .face.face-back {
+  background: #334155;
+}
+
+/* Dark mode shadow - more visible */
+.dark .boxes-shadow {
+  opacity: 0.25;
+  filter: blur(4px);
+}

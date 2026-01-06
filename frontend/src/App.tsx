@@ -1,6 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, Search, Library, Upload, Menu, MessageSquare, Layers, X, BarChart2 } from 'lucide-react';
+import { Brain, Library, Upload, Menu, MessageSquare, Layers, X, BarChart2, LogOut } from 'lucide-react';
 import { API_ENDPOINTS } from './config/api';
 import './App.css';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -15,6 +15,7 @@ import {
   PageLoader,
 } from './components/ui';
 import { OfflineProvider } from './contexts/OfflineContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import {
   OfflineIndicator,
   InstallPrompt,
@@ -23,9 +24,9 @@ import {
 
 // Lazy load heavy components for code splitting
 const LandingPage = lazy(() => import('./components/LandingPage'));
+const AdminLogin = lazy(() => import('./components/AdminLogin'));
 const FileUpload = lazy(() => import('./components/FileUpload').then(m => ({ default: m.FileUpload })));
 const DocumentLibrary = lazy(() => import('./components/DocumentLibrary').then(m => ({ default: m.DocumentLibrary })));
-const SearchPage = lazy(() => import('./components/SearchPage'));
 const Chat = lazy(() => import('./components/chat/ChatPage'));
 const ClassifiedView = lazy(() => import('./components/ClassifiedView'));
 const ClustersView = lazy(() => import('./components/ClustersView'));
@@ -64,33 +65,38 @@ export interface SearchResult {
   };
 }
 
-type ActiveTab = 'upload' | 'search' | 'library' | 'classified' | 'clusters' | 'chat' | 'analytics';
+type ActiveTab = 'upload' | 'library' | 'classified' | 'clusters' | 'chat' | 'analytics';
+type ViewState = 'landing' | 'login' | 'dashboard';
 
-const tabs: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'upload', label: 'Upload', icon: <Upload className="h-4 w-4" /> },
-  { id: 'search', label: 'Search', icon: <Search className="h-4 w-4" /> },
-  { id: 'chat', label: 'Chat', icon: <MessageSquare className="h-4 w-4" /> },
-  { id: 'library', label: 'Library', icon: <Library className="h-4 w-4" /> },
-  { id: 'classified', label: 'Classified', icon: <Library className="h-4 w-4" /> },
-  { id: 'clusters', label: 'Clusters', icon: <Layers className="h-4 w-4" /> },
-  { id: 'analytics', label: 'Analytics', icon: <BarChart2 className="h-4 w-4" /> },
+// All navigation items with access control
+const allTabs: { id: ActiveTab; label: string; icon: React.ReactNode; adminOnly: boolean }[] = [
+  { id: 'chat', label: 'Chat', icon: <MessageSquare className="h-4 w-4" />, adminOnly: false },
+  { id: 'library', label: 'Library', icon: <Library className="h-4 w-4" />, adminOnly: false },
+  { id: 'upload', label: 'Upload', icon: <Upload className="h-4 w-4" />, adminOnly: true },
+  { id: 'classified', label: 'Classified', icon: <Library className="h-4 w-4" />, adminOnly: true },
+  { id: 'clusters', label: 'Clusters', icon: <Layers className="h-4 w-4" />, adminOnly: true },
+  { id: 'analytics', label: 'Analytics', icon: <BarChart2 className="h-4 w-4" />, adminOnly: true },
 ];
 
-const validTabs: ActiveTab[] = ['upload', 'search', 'library', 'classified', 'clusters', 'chat', 'analytics'];
+const validTabs: ActiveTab[] = ['upload', 'library', 'classified', 'clusters', 'chat', 'analytics'];
 
-function getInitialView(): { showLanding: boolean; tab: ActiveTab } {
+function getInitialView(): { view: ViewState; tab: ActiveTab } {
   const hash = window.location.hash.slice(1); // Remove #
   if (hash === '' || hash === 'home') {
-    return { showLanding: true, tab: 'upload' };
+    return { view: 'landing', tab: 'chat' };
+  }
+  if (hash === 'login') {
+    return { view: 'login', tab: 'chat' };
   }
   if (validTabs.includes(hash as ActiveTab)) {
-    return { showLanding: false, tab: hash as ActiveTab };
+    return { view: 'dashboard', tab: hash as ActiveTab };
   }
-  return { showLanding: true, tab: 'upload' };
+  return { view: 'landing', tab: 'chat' };
 }
 
 function AppContent() {
-  const [showLanding, setShowLanding] = useState(() => getInitialView().showLanding);
+  const { isAdmin, logout, admin } = useAuth();
+  const [viewState, setViewState] = useState<ViewState>(() => getInitialView().view);
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => getInitialView().tab);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [stats, setStats] = useState({ totalDocuments: 0, totalChunks: 0 });
@@ -98,11 +104,16 @@ function AppContent() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
 
+  // Filter tabs based on role
+  const tabs = useMemo(() => {
+    return isAdmin ? allTabs : allTabs.filter(tab => !tab.adminOnly);
+  }, [isAdmin]);
+
   // Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = () => {
-      const { showLanding: newShowLanding, tab: newTab } = getInitialView();
-      setShowLanding(newShowLanding);
+      const { view: newView, tab: newTab } = getInitialView();
+      setViewState(newView);
       setActiveTab(newTab);
     };
 
@@ -118,12 +129,12 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (!showLanding) {
+    if (viewState === 'dashboard') {
       loadDocuments();
       loadStats();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showLanding]);
+  }, [viewState]);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -190,21 +201,52 @@ function AppContent() {
 
   // Navigate to a tab and update URL
   const navigateToTab = useCallback((tab: ActiveTab) => {
+    // Check if user has access to this tab
+    const tabConfig = allTabs.find(t => t.id === tab);
+    if (tabConfig?.adminOnly && !isAdmin) {
+      // Redirect to chat if trying to access admin-only tab
+      setActiveTab('chat');
+      setViewState('dashboard');
+      window.history.pushState(null, '', '#chat');
+      return;
+    }
     setActiveTab(tab);
-    setShowLanding(false);
+    setViewState('dashboard');
     window.history.pushState(null, '', `#${tab}`);
-  }, []);
+  }, [isAdmin]);
 
   // Navigate to landing page
   const navigateToLanding = useCallback(() => {
-    setShowLanding(true);
+    setViewState('landing');
     window.history.pushState(null, '', '#home');
   }, []);
 
-  // Handle Get Started from landing page
+  // Navigate to admin login
+  const navigateToLogin = useCallback(() => {
+    setViewState('login');
+    window.history.pushState(null, '', '#login');
+  }, []);
+
+  // Handle Get Started from landing page (guest user)
   const handleGetStarted = useCallback(() => {
+    navigateToTab('chat');
+  }, [navigateToTab]);
+
+  // Handle Admin Login button
+  const handleAdminLogin = useCallback(() => {
+    navigateToLogin();
+  }, [navigateToLogin]);
+
+  // Handle successful login
+  const handleLoginSuccess = useCallback(() => {
     navigateToTab('upload');
   }, [navigateToTab]);
+
+  // Handle logout
+  const handleLogout = useCallback(() => {
+    logout();
+    navigateToLanding();
+  }, [logout, navigateToLanding]);
 
   // Memoize tab buttons to prevent re-renders
   const tabButtons = useMemo(() => tabs.map((tab) => (
@@ -230,14 +272,25 @@ function AppContent() {
         />
       )}
     </button>
-  )), [activeTab, navigateToTab]);
+  )), [activeTab, navigateToTab, tabs]);
 
-  // Show Landing Page (completely separate, no header/nav)
-  if (showLanding) {
+  // Show Landing Page
+  if (viewState === 'landing') {
     return (
       <div className="min-h-screen bg-white dark:bg-secondary-900 transition-colors duration-300">
         <Suspense fallback={<PageLoader message="Loading..." />}>
-          <LandingPage onGetStarted={handleGetStarted} />
+          <LandingPage onGetStarted={handleGetStarted} onAdminLogin={handleAdminLogin} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  // Show Admin Login Page
+  if (viewState === 'login') {
+    return (
+      <div className="min-h-screen bg-white dark:bg-secondary-900 transition-colors duration-300">
+        <Suspense fallback={<PageLoader message="Loading..." />}>
+          <AdminLogin onBack={navigateToLanding} onSuccess={handleLoginSuccess} />
         </Suspense>
       </div>
     );
@@ -289,6 +342,11 @@ function AppContent() {
                 <Badge variant="secondary">
                   {stats.totalChunks} chunks
                 </Badge>
+                {isAdmin && (
+                  <Badge variant="default" className="bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">
+                    Admin
+                  </Badge>
+                )}
               </div>
               
               <ThemeToggle />
@@ -302,6 +360,19 @@ function AppContent() {
                   <Menu className="h-5 w-5" />
                 </button>
               </Tooltip>
+
+              {/* Admin logout button */}
+              {isAdmin && (
+                <Tooltip content={`Logout (${admin?.name})`}>
+                  <button
+                    onClick={handleLogout}
+                    className="btn-icon text-secondary-600 hover:text-red-500 dark:text-secondary-400 dark:hover:text-red-400"
+                    aria-label="Logout"
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </button>
+                </Tooltip>
+              )}
 
               {/* Mobile menu button */}
               <button
@@ -373,8 +444,6 @@ function AppContent() {
                 </div>
               )}
               
-              {activeTab === 'search' && <SearchPage />}
-              
               {activeTab === 'library' && (
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                   <div className="lg:col-span-3">
@@ -412,7 +481,9 @@ function App() {
         <ThemeProvider>
           <ToastProvider>
             <TooltipProvider delayDuration={300}>
-              <AppContent />
+              <AuthProvider>
+                <AppContent />
+              </AuthProvider>
             </TooltipProvider>
           </ToastProvider>
         </ThemeProvider>

@@ -84,8 +84,18 @@ blazingSearchRouter.post('/search', async (req, res) => {
       confidence: result.confidence,
       cached: result.cached,
       sourcesCount: result.sources.length,
+      tokensUsed: result.tokensUsed || 0,
       blazingSearch: true // Flag to indicate it's from blazing endpoint
     });
+
+    // Also track AI response for token usage
+    if (result.tokensUsed && result.tokensUsed > 0) {
+      await analyticsService.trackEvent('ai_response', sessionId, {
+        tokensUsed: result.tokensUsed,
+        query: validated.query.substring(0, 200),
+        responseTime: result.responseTime
+      });
+    }
 
     res.json({
       success: true,

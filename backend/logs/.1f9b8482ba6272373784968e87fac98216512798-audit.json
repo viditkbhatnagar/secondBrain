@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\codes\\second Brain\\secondBrain\\backend\\logs\\.1f9b8482ba6272373784968e87fac98216512798-audit.json",
+    "files": [
+        {
+            "date": 1767649413630,
+            "name": "C:\\codes\\second Brain\\secondBrain\\backend\\logs\\app-2026-01-06.log",
+            "hash": "33583387ff91a4cb1a4f793f2d6126f91e947ae7f0e410eed32b2d22a8fd9c46"
+        }
+    ],
+    "hashType": "sha256"
+}

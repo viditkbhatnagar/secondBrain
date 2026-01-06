@@ -1,9 +1,21 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables from backend/.env FIRST
+const envPath = path.resolve(__dirname, '../.env');
+console.log('🔧 Loading .env from:', envPath);
+const result = dotenv.config({ path: envPath });
+if (result.error) {
+  console.error('❌ Error loading .env:', result.error);
+} else {
+  console.log('✅ .env loaded successfully');
+  console.log('📝 MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
+}
+
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import multer from 'multer';
-import path from 'path';
 import fs from 'fs-extra';
 import swaggerUi from 'swagger-ui-express';
 import { fileUploadRouter } from './routes/fileUpload';
@@ -12,6 +24,7 @@ import { documentsRouter } from './routes/documents';
 import { chatRouter } from './routes/chat';
 import { adminRouter } from './routes/admin';
 import { graphRouter } from './routes/graph';
+import authRouter from './routes/auth';
 import { healthRouter } from './routes/health';
 import analyticsRouter from './routes/analytics';
 import ultimateSearchRouter from './routes/ultimateSearch';
@@ -164,6 +177,7 @@ app.use('/api/search', searchRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/graph', graphRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/analytics', analyticsRouter);

@@ -1,16 +1,16 @@
 import React, { useRef, useEffect } from 'react';
 import { Sparkles, Loader2 } from 'lucide-react';
-import { Button, Checkbox } from '../ui';
+import { Button } from '../ui';
 
 interface ChatInputProps {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
   isLoading: boolean;
-  strategy: 'hybrid' | 'vector';
-  onStrategyChange: (strategy: 'hybrid' | 'vector') => void;
-  rerank: boolean;
-  onRerankChange: (rerank: boolean) => void;
+  strategy?: 'hybrid' | 'vector';
+  onStrategyChange?: (strategy: 'hybrid' | 'vector') => void;
+  rerank?: boolean;
+  onRerankChange?: (rerank: boolean) => void;
   disabled?: boolean;
 }
 
@@ -19,10 +19,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onChange,
   onSend,
   isLoading,
-  strategy,
-  onStrategyChange,
-  rerank,
-  onRerankChange,
   disabled,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -48,24 +44,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <div className="border-t border-secondary-200 dark:border-secondary-800 bg-white dark:bg-secondary-900 p-4">
       <div className="max-w-3xl mx-auto">
-        {/* Options row */}
-        <div className="flex items-center gap-4 mb-3">
-          <select
-            value={strategy}
-            onChange={(e) => onStrategyChange(e.target.value as 'hybrid' | 'vector')}
-            className="text-sm border border-secondary-300 dark:border-secondary-600 rounded-lg px-3 py-1.5 bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent shadow-sm"
-          >
-            <option value="hybrid">Hybrid Search</option>
-            <option value="vector">Vector Search</option>
-          </select>
-
-          <Checkbox
-            checked={rerank}
-            onCheckedChange={(checked) => onRerankChange(checked as boolean)}
-            label="Rerank results"
-          />
-        </div>
-
         {/* Input row */}
         <div className="flex gap-3">
           <div className="flex-1 relative">
