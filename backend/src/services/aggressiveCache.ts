@@ -64,6 +64,7 @@ class AggressiveCache {
         // Populate memory cache
         this.setMemory(key, redisValue);
         this.hitCount++;
+        logger.info(`🎯 AggressiveCache Redis HIT`, { namespace, key: key.substring(0, 20) });
         return redisValue;
       }
     } catch (error) {
@@ -90,6 +91,7 @@ class AggressiveCache {
     // Set in Redis
     try {
       await redisService.set(key, data, finalTTL);
+      logger.info(`💾 AggressiveCache Redis CACHED`, { namespace, key: key.substring(0, 20) });
     } catch (error) {
       logger.warn('Redis set failed:', error);
     }
@@ -152,10 +154,15 @@ class AggressiveCache {
   // Specialized cache methods
   async cacheEmbedding(text: string, embedding: number[]): Promise<void> {
     await this.set('emb', text, embedding, 86400 * 7); // 7 days
+    logger.info(`📥 Embedding cached via AggressiveCache`, { textLength: text.length });
   }
 
   async getEmbedding(text: string): Promise<number[] | null> {
-    return this.get<number[]>('emb', text);
+    const result = await this.get<number[]>('emb', text);
+    if (result) {
+      logger.info(`📤 Embedding retrieved from AggressiveCache`, { textLength: text.length });
+    }
+    return result;
   }
 
   async cacheSearchResult(query: string, results: any[]): Promise<void> {
