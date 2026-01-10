@@ -12,6 +12,7 @@ import { validateBody } from '../middleware/validate';
 import { searchSchema, agentSearchSchema, relatedQuestionsSchema, optimizedSearchSchema } from '../validation/schemas';
 import { logger } from '../utils/logger';
 import { SearchCache } from '../utils/cache';
+import { aggressiveCache } from '../services/aggressiveCache';
 import { z } from 'zod';
 
 export const searchRouter = express.Router();
@@ -746,6 +747,47 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     }
     timings.clarification = Date.now() - stageStart;
 
+    // Step 4.5: Check for cached answer (only for non-follow-up queries)
+    if (!isFollowUp) {
+      const cachedResponse = await aggressiveCache.getRAGResponse(effectiveQuery);
+      if (cachedResponse) {
+        logger.info(`💨 Returning cached answer for query`, { query: effectiveQuery.substring(0, 50) });
+        
+        // Stream the cached answer
+        const cachedAnswer = cachedResponse.answer || '';
+        const chunkSize = 50;
+        for (let i = 0; i < cachedAnswer.length; i += chunkSize) {
+          send('answer', { partial: cachedAnswer.substring(i, i + chunkSize) });
+        }
+        
+        // Send done with cached metadata
+        send('done', { 
+          metadata: { 
+            strategy, 
+            rerank, 
+            isFollowUp: false,
+            cached: true,
+            confidence: cachedResponse.confidence || 85,
+            timings: {
+              threadCreation: timings.threadCreation,
+              historyFetch: timings.historyFetch,
+              messageLog: timings.messageLog,
+              queryResolution: timings.queryResolution,
+              clarification: timings.clarification,
+              retrieval: 0, // Cached
+              answerGeneration: 0, // Cached
+              persistence: timings.persistence || 0,
+              total: Date.now() - overallStartTime
+            }
+          }, 
+          agentTrace: cachedResponse.trace || [] 
+        });
+        
+        res.end();
+        return;
+      }
+    }
+
     // Step 5: retrieve - search with all queries and combine results
     const searchQuery = clarifying ? `${effectiveQuery}\nClarification: ${clarifying}` : effectiveQuery;
     let allChunks: any[] = [];
@@ -994,6 +1036,17 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     await DatabaseService.logSearchQuery(query, allChunks.length, result.confidence, 0);
     await DatabaseService.addMessage(tid, 'assistant', result.answer, { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: false } }, trace);
     timings.persistence = Date.now() - stageStart;
+    
+    // Cache the answer for future queries (only for non-follow-up, non-general-knowledge queries)
+    if (!isFollowUp && !isGeneralKnowledge) {
+      await aggressiveCache.cacheRAGResponse(effectiveQuery, {
+        answer: result.answer,
+        confidence: result.confidence,
+        trace: trace,
+        chunks: allChunks.length
+      });
+      logger.info(`📦 Cached RAG response`, { query: effectiveQuery.substring(0, 50), confidence: result.confidence });
+    }
     
     // Track chat message analytics with token usage
     const sessionId = req.headers['x-session-id'] as string || req.ip || 'anonymous';
