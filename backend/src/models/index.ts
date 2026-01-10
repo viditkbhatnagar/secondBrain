@@ -108,6 +108,50 @@ export interface IChatMessage extends Document {
   createdAt: Date;
 }
 
+// Training Organization (e.g., SSM, Knights)
+export interface ITrainingOrganization extends Document {
+  id: string;
+  name: string;                    // e.g., "SSM", "Knights"
+  description?: string;
+  logoUrl?: string;
+  isActive: boolean;
+  courseCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Training Course (e.g., MBA, BBA, BSC)
+export interface ITrainingCourse extends Document {
+  id: string;
+  organizationId: string;          // Link to organization
+  name: string;                    // e.g., "MBA", "BBA", "BSC"
+  fullName: string;                // e.g., "Master of Business Administration"
+  description?: string;
+  thumbnailUrl?: string;
+  isActive: boolean;
+  documentCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Training Document (PDFs uploaded for courses)
+export interface ITrainingDocument extends Document {
+  id: string;
+  courseId: string;                // Link to course
+  organizationId: string;          // Link to organization (for easy querying)
+  filename: string;                // Stored filename
+  originalName: string;            // Original upload name
+  mimeType: string;
+  filePath: string;                // Path to stored file
+  fileSize: number;
+  pageCount: number;
+  description?: string;
+  thumbnailUrl?: string;           // First page thumbnail
+  isActive: boolean;
+  uploadedAt: Date;
+  updatedAt: Date;
+}
+
 // Graph models
 export interface IGraphNode extends Document {
   id: string; // generated
@@ -277,6 +321,60 @@ const SavedSearchSchema = new Schema<ISavedSearch>({
 });
 
 export const SavedSearchModel = mongoose.model<ISavedSearch>('SavedSearch', SavedSearchSchema);
+
+// Training Organization schema
+const TrainingOrganizationSchema = new Schema<ITrainingOrganization>({
+  id: { type: String, required: true, unique: true, index: true },
+  name: { type: String, required: true, unique: true, index: true },
+  description: { type: String },
+  logoUrl: { type: String },
+  isActive: { type: Boolean, default: true, index: true },
+  courseCount: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// Training Course schema
+const TrainingCourseSchema = new Schema<ITrainingCourse>({
+  id: { type: String, required: true, unique: true, index: true },
+  organizationId: { type: String, required: true, index: true },
+  name: { type: String, required: true, index: true },
+  fullName: { type: String, required: true },
+  description: { type: String },
+  thumbnailUrl: { type: String },
+  isActive: { type: Boolean, default: true, index: true },
+  documentCount: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// Compound index for unique course per organization
+TrainingCourseSchema.index({ organizationId: 1, name: 1 }, { unique: true });
+
+// Training Document schema
+const TrainingDocumentSchema = new Schema<ITrainingDocument>({
+  id: { type: String, required: true, unique: true, index: true },
+  courseId: { type: String, required: true, index: true },
+  organizationId: { type: String, required: true, index: true },
+  filename: { type: String, required: true },
+  originalName: { type: String, required: true, index: true },
+  mimeType: { type: String, required: true },
+  filePath: { type: String, required: true },
+  fileSize: { type: Number, required: true },
+  pageCount: { type: Number, default: 0 },
+  description: { type: String },
+  thumbnailUrl: { type: String },
+  isActive: { type: Boolean, default: true, index: true },
+  uploadedAt: { type: Date, default: Date.now, index: true },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// Text index for searching training documents
+TrainingDocumentSchema.index({ originalName: 'text', description: 'text' });
+
+export const TrainingOrganizationModel = mongoose.model<ITrainingOrganization>('TrainingOrganization', TrainingOrganizationSchema);
+export const TrainingCourseModel = mongoose.model<ITrainingCourse>('TrainingCourse', TrainingCourseSchema);
+export const TrainingDocumentModel = mongoose.model<ITrainingDocument>('TrainingDocument', TrainingDocumentSchema);
 
 // Category schema for smart KB classification
 const CategorySchema = new Schema<ICategory>({

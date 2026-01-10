@@ -1,14 +1,15 @@
 import { SplineScene } from './ui/splite';
 import { Spotlight } from './ui/spotlight';
-import { Brain, ArrowRight, Upload, Search, MessageSquare, BarChart2, Sparkles } from 'lucide-react';
+import { Brain, ArrowRight, Upload, Search, MessageSquare, BarChart2, Sparkles, GraduationCap } from 'lucide-react';
 import { ThemeToggle } from './ui';
 
 interface LandingPageProps {
   onGetStarted: () => void;
   onAdminLogin: () => void;
+  onTraining: () => void;
 }
 
-export function LandingPage({ onGetStarted, onAdminLogin }: LandingPageProps) {
+export function LandingPage({ onGetStarted, onAdminLogin, onTraining }: LandingPageProps) {
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/50 to-violet-50/30 dark:from-secondary-900 dark:via-secondary-900 dark:to-secondary-800 relative">
       <Spotlight
@@ -138,7 +139,7 @@ export function LandingPage({ onGetStarted, onAdminLogin }: LandingPageProps) {
                   Upload documents, ask questions, and get intelligent answers powered by advanced RAG technology.
                 </p>
 
-                <div className="mt-6">
+                <div className="mt-6 flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={onGetStarted}
                     className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold rounded-xl transition-all duration-200 hover:-translate-y-0.5"
@@ -148,6 +149,17 @@ export function LandingPage({ onGetStarted, onAdminLogin }: LandingPageProps) {
                   >
                     Get Started
                     <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+
+                  <button
+                    onClick={onTraining}
+                    className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+                    style={{
+                      boxShadow: '0 4px 14px -3px rgba(16, 185, 129, 0.5), 0 8px 20px -6px rgba(16, 185, 129, 0.4), inset 0 1px 0 0 rgba(255,255,255,0.2)'
+                    }}
+                  >
+                    <GraduationCap className="h-4 w-4" />
+                    Training
                   </button>
                 </div>
 

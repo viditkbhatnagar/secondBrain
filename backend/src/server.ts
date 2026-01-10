@@ -30,9 +30,11 @@ import analyticsRouter from './routes/analytics';
 import ultimateSearchRouter from './routes/ultimateSearch';
 import { blazingSearchRouter } from './routes/blazingSearch';
 import { categoryRouter } from './routes/categories';
+import { trainingRouter } from './routes/training';
 import { DatabaseService } from './services/DatabaseService';
 import { VectorService } from './services/VectorService';
 import { GptService } from './services/GptService';
+import { TrainingService } from './services/TrainingService';
 import { redisService } from './services/RedisService';
 import { cacheWarmer } from './services/cacheWarmer';
 import { swaggerSpec } from './config/swagger';
@@ -183,6 +185,7 @@ app.use('/api/graph', graphRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/categories', categoryRouter); // Smart KB category management
+app.use('/api/training', trainingRouter); // Training module for courses
 app.use('/api/search', ultimateSearchRouter);
 
 // Swagger API documentation
@@ -293,6 +296,9 @@ async function startServer() {
     // Initialize services in order
     GptService.initialize();
     logger.info('✅ GPT service initialized');
+
+    TrainingService.initialize();
+    logger.info('✅ Training service initialized');
 
     await DatabaseService.initialize();
     logger.info('✅ Database service initialized');

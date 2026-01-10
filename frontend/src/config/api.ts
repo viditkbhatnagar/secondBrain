@@ -28,7 +28,17 @@ const getApiBaseUrl = (): string => {
     health: `${API_BASE_URL}/health`,
     baseChat: `${API_BASE_URL}/chat`,
     baseAdmin: `${API_BASE_URL}/admin`,
-    baseGraph: `${API_BASE_URL}/graph`
+    baseGraph: `${API_BASE_URL}/graph`,
+    // Training module endpoints
+    training: `${API_BASE_URL}/training`,
+    trainingOrganizations: `${API_BASE_URL}/training/organizations`,
+    trainingCourses: `${API_BASE_URL}/training/courses`,
+    trainingDocuments: `${API_BASE_URL}/training/documents`,
+    trainingStats: `${API_BASE_URL}/training/stats`,
+    // Training admin endpoints
+    trainingAdminOrganizations: `${API_BASE_URL}/training/admin/organizations`,
+    trainingAdminCourses: `${API_BASE_URL}/training/admin/courses`,
+    trainingAdminDocuments: `${API_BASE_URL}/training/admin/documents`
   };
   
   // Helper function for making API requests with error handling

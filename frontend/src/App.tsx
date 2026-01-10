@@ -1,6 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, Library, Upload, Menu, MessageSquare, Layers, X, BarChart2, LogOut } from 'lucide-react';
+import { Brain, Library, Upload, Menu, MessageSquare, Layers, X, BarChart2, LogOut, GraduationCap } from 'lucide-react';
 import { API_ENDPOINTS } from './config/api';
 import './App.css';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -33,6 +33,8 @@ const ClustersView = lazy(() => import('./components/ClustersView'));
 const EntitiesPanel = lazy(() => import('./components/EntitiesPanel'));
 const RightSidebar = lazy(() => import('./components/RightSidebar'));
 const AnalyticsDashboard = lazy(() => import('./components/analytics/AnalyticsDashboard'));
+const TrainingPage = lazy(() => import('./components/training/TrainingPage'));
+const AdminTraining = lazy(() => import('./components/training/AdminTraining'));
 
 export interface Document {
   id: string;
@@ -65,20 +67,22 @@ export interface SearchResult {
   };
 }
 
-type ActiveTab = 'upload' | 'library' | 'classified' | 'clusters' | 'chat' | 'analytics';
+type ActiveTab = 'upload' | 'library' | 'classified' | 'clusters' | 'chat' | 'analytics' | 'training' | 'admin-training';
 type ViewState = 'landing' | 'login' | 'dashboard';
 
 // All navigation items with access control
 const allTabs: { id: ActiveTab; label: string; icon: React.ReactNode; adminOnly: boolean; hidden?: boolean }[] = [
   { id: 'chat', label: 'Chat', icon: <MessageSquare className="h-4 w-4" />, adminOnly: false },
   { id: 'library', label: 'Library', icon: <Library className="h-4 w-4" />, adminOnly: false },
+  { id: 'training', label: 'Training', icon: <GraduationCap className="h-4 w-4" />, adminOnly: false },
   { id: 'upload', label: 'Upload', icon: <Upload className="h-4 w-4" />, adminOnly: true },
+  { id: 'admin-training', label: 'Training Admin', icon: <GraduationCap className="h-4 w-4" />, adminOnly: true },
   { id: 'classified', label: 'Classified', icon: <Library className="h-4 w-4" />, adminOnly: true, hidden: true },
   { id: 'clusters', label: 'Clusters', icon: <Layers className="h-4 w-4" />, adminOnly: true, hidden: true },
   { id: 'analytics', label: 'Analytics', icon: <BarChart2 className="h-4 w-4" />, adminOnly: true },
 ];
 
-const validTabs: ActiveTab[] = ['upload', 'library', 'classified', 'clusters', 'chat', 'analytics'];
+const validTabs: ActiveTab[] = ['upload', 'library', 'classified', 'clusters', 'chat', 'analytics', 'training', 'admin-training'];
 
 function getInitialView(): { view: ViewState; tab: ActiveTab } {
   const hash = window.location.hash.slice(1); // Remove #
@@ -234,6 +238,11 @@ function AppContent() {
     navigateToTab('chat');
   }, [navigateToTab]);
 
+  // Handle Training button from landing page
+  const handleTraining = useCallback(() => {
+    navigateToTab('training');
+  }, [navigateToTab]);
+
   // Handle Admin Login button
   const handleAdminLogin = useCallback(() => {
     navigateToLogin();
@@ -281,7 +290,7 @@ function AppContent() {
     return (
       <div className="min-h-screen bg-white dark:bg-secondary-900 transition-colors duration-300">
         <Suspense fallback={<PageLoader message="Loading..." />}>
-          <LandingPage onGetStarted={handleGetStarted} onAdminLogin={handleAdminLogin} />
+          <LandingPage onGetStarted={handleGetStarted} onAdminLogin={handleAdminLogin} onTraining={handleTraining} />
         </Suspense>
       </div>
     );
@@ -464,6 +473,8 @@ function AppContent() {
               {activeTab === 'clusters' && <ClustersView />}
               {activeTab === 'chat' && <Chat />}
               {activeTab === 'analytics' && <AnalyticsDashboard />}
+              {activeTab === 'training' && <TrainingPage />}
+              {activeTab === 'admin-training' && <AdminTraining />}
             </Suspense>
           </PageTransition>
         </AnimatePresence>
