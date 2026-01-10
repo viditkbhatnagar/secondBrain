@@ -582,21 +582,55 @@ JSON ARRAY:`;
     documentId: string,
     pageNumber: number
   ): Promise<Buffer> {
-    // First get the text explanation
-    const explanation = await this.explainPage(documentId, pageNumber);
+    // Extract page content for detailed audio explanation
+    const pageContent = await this.extractPageContent(documentId, pageNumber);
 
-    if (!explanation || explanation.length < 10) {
-      throw new Error('Unable to generate explanation for audio');
+    if (!pageContent || pageContent.trim().length < 50) {
+      throw new Error('Insufficient content on this page to generate audio explanation');
     }
 
-    // Limit text length for TTS (max ~4096 chars typically)
-    const textForAudio = explanation.substring(0, 4000);
+    // Generate a detailed, conversational explanation specifically for audio narration
+    const audioPrompt = `You are an expert trainer creating an audio lecture for sales consultants. Based on the following training material, create a detailed, engaging spoken explanation that would work well as an audio lecture.
+
+PAGE CONTENT:
+${pageContent}
+
+INSTRUCTIONS:
+1. Start with a brief introduction to what this section covers
+2. Explain each concept thoroughly as if you're teaching a live class
+3. Use conversational language that sounds natural when spoken aloud
+4. Include practical examples and real-world applications for sales consultants
+5. Explain technical terms in simple, everyday language
+6. Add transitions between topics (e.g., "Now, let's move on to...", "An important point to remember is...")
+7. Summarize key takeaways at the end
+8. Keep the tone professional but friendly and engaging
+9. Make it detailed - aim for 3-5 minutes of spoken content (approximately 500-800 words)
+10. Do NOT use bullet points, numbers, or formatting - write in flowing paragraphs suitable for narration
+
+AUDIO LECTURE SCRIPT:`;
+
+    const response = await this.openai.chat.completions.create({
+      model: this.model,
+      max_tokens: 2500,
+      temperature: 0.7,
+      messages: [{ role: 'user', content: audioPrompt }]
+    });
+
+    const audioScript = response.choices[0]?.message?.content?.trim();
+
+    if (!audioScript || audioScript.length < 100) {
+      throw new Error('Unable to generate audio script');
+    }
+
+    // Limit text length for TTS (max ~4096 chars)
+    const textForAudio = audioScript.substring(0, 4000);
 
     const mp3Response = await this.openai.audio.speech.create({
       model: this.ttsModel,
       voice: this.ttsVoice,
       input: textForAudio,
-      response_format: 'mp3'
+      response_format: 'mp3',
+      speed: 1.0
     });
 
     // Convert response to Buffer
