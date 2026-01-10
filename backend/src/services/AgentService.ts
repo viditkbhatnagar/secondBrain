@@ -4,6 +4,7 @@ import { GptService, RelevantChunk, SearchResult } from './GptService';
 import { GraphService } from './GraphService';
 import { DocumentModel } from '../models/index';
 import { OpenAIService } from './OpenAIService';
+import { QueryClassifierService, QueryClassification } from './QueryClassifierService';
 
 type RetrievalStrategy = 'hybrid' | 'vector';
 
@@ -445,6 +446,104 @@ export class AgentService {
   }
 
   /**
+   * SMART RETRIEVE: Category-aware retrieval that only searches relevant categories
+   * This is a faster alternative to retrieve() for large knowledge bases
+   */
+  static async retrieveSmart(
+    question: string,
+    options?: {
+      strategy?: RetrievalStrategy;
+      rerank?: boolean;
+      forceAllDocuments?: boolean;
+    }
+  ): Promise<{
+    chunks: RelevantChunk[];
+    trace: any[];
+    classification: QueryClassification;
+    searchedDocuments: number;
+  }> {
+    const trace: any[] = [];
+    const strategy = options?.strategy || 'hybrid';
+    const rerank = options?.rerank !== false;
+    const forceAll = options?.forceAllDocuments || false;
+
+    // Use smart search with category filtering
+    const smartResult = await VectorService.searchSimilarSmart(question, {
+      limit: 6,
+      minSimilarity: 0.45,
+      enableFallback: true,
+      forceAllDocuments: forceAll
+    });
+
+    trace.push({
+      step: 'smart-retrieval',
+      detail: {
+        categories: smartResult.classification.categories,
+        shouldSearchAll: smartResult.classification.shouldSearchAll,
+        confidence: smartResult.classification.confidence,
+        searchedDocuments: smartResult.searchedDocuments,
+        foundChunks: smartResult.chunks.length,
+        reasoning: smartResult.classification.reasoning
+      }
+    });
+
+    // If using hybrid strategy and we got chunks, apply hybrid scoring
+    let finalChunks = smartResult.chunks;
+    if (strategy === 'hybrid' && finalChunks.length > 0 && rerank) {
+      try {
+        // Get document IDs from smart search results
+        const docIds = [...new Set(finalChunks.map(c => c.documentId))];
+
+        // Run hybrid search within those documents only
+        const hybridChunks = await VectorService.searchSimilarHybrid(question, {
+          limit: 6,
+          minSimilarity: 0.40,
+          rerank: true
+        });
+
+        // Filter to only include chunks from our category-matched documents
+        const filteredHybrid = hybridChunks.filter(c => docIds.includes(c.documentId));
+
+        if (filteredHybrid.length > 0) {
+          finalChunks = filteredHybrid;
+          trace.push({
+            step: 'hybrid-refinement',
+            detail: {
+              originalCount: smartResult.chunks.length,
+              refinedCount: finalChunks.length
+            }
+          });
+        }
+      } catch (err) {
+        // Fall back to smart search results
+        trace.push({ step: 'hybrid-refinement-skipped', detail: { error: (err as Error).message } });
+      }
+    }
+
+    // Log quality metrics
+    if (finalChunks.length > 0) {
+      const avgSim = finalChunks.reduce((s, c) => s + c.similarity, 0) / finalChunks.length;
+      const topSim = finalChunks[0].similarity;
+      trace.push({
+        step: 'retrieval-quality',
+        detail: {
+          count: finalChunks.length,
+          topSimilarity: Math.round(topSim * 100),
+          avgSimilarity: Math.round(avgSim * 100),
+          uniqueDocs: new Set(finalChunks.map(c => c.documentId)).size
+        }
+      });
+    }
+
+    return {
+      chunks: finalChunks,
+      trace,
+      classification: smartResult.classification,
+      searchedDocuments: smartResult.searchedDocuments
+    };
+  }
+
+  /**
    * Answer Agent: synthesizes answer from chunks with GPT-5.
    * Now supports conversation history for follow-up questions
    * Falls back to OpenAI for general knowledge when no documents found
@@ -452,14 +551,15 @@ export class AgentService {
   static async answer(
     question: string, 
     chunks: RelevantChunk[],
-    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
+    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    mode: 'fast' | 'detail' = 'fast'
   ): Promise<SearchResult & { isGeneralKnowledge?: boolean }> {
     if (chunks.length === 0) {
-      // Try OpenAI for general knowledge answer
+      // Try OpenAI for general knowledge answer (always use fast mode for external queries)
       if (OpenAIService.isConfigured()) {
         try {
           console.log('📚 No documents found, falling back to OpenAI for general knowledge...');
-          const openAIResult = await OpenAIService.generateGeneralAnswer(question, conversationHistory);
+          const openAIResult = await OpenAIService.generateGeneralAnswer(question, conversationHistory, mode === 'fast');
           return {
             answer: openAIResult.answer,
             relevantChunks: [],
@@ -480,7 +580,7 @@ export class AgentService {
         sources: []
       };
     }
-    return await GptService.answerQuestion(question, chunks, conversationHistory);
+    return await GptService.answerQuestion(question, chunks, conversationHistory, mode);
   }
 
   /**

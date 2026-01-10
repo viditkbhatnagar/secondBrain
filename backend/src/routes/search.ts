@@ -669,6 +669,8 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     const strategy = (req.query.strategy as string) === 'vector' ? 'vector' : 'hybrid';
     const rerank = req.query.rerank !== 'false';
     const threadId = String(req.query.threadId || '');
+    const mode = (req.query.mode as string) === 'detail' ? 'detail' : 'fast';
+    const smart = req.query.smart === 'true'; // Enable smart category-based search
 
     if (!query || query.length > 2000) {
       res.status(400).end();
@@ -734,11 +736,31 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     const searchQuery = clarifying ? `${effectiveQuery}\nClarification: ${clarifying}` : effectiveQuery;
     let allChunks: any[] = [];
     let trace: any[] = [];
-    
-    // Search with primary query
-    const primaryResult = await AgentService.retrieve(searchQuery, strategy as any, rerank);
-    allChunks = [...primaryResult.chunks];
-    trace = [...primaryResult.trace];
+
+    // Search with primary query - use smart retrieval if enabled
+    if (smart) {
+      // Smart category-based retrieval (faster for large KBs)
+      const smartResult = await AgentService.retrieveSmart(searchQuery, { strategy: strategy as any, rerank });
+      allChunks = [...smartResult.chunks];
+      trace = [...smartResult.trace];
+
+      // Add category info to response
+      if (smartResult.classification.categories.length > 0) {
+        send('step', {
+          label: 'Smart search',
+          detail: {
+            categories: smartResult.classification.categories,
+            searchedDocuments: smartResult.searchedDocuments,
+            confidence: smartResult.classification.confidence
+          }
+        });
+      }
+    } else {
+      // Standard retrieval (searches all documents)
+      const primaryResult = await AgentService.retrieve(searchQuery, strategy as any, rerank);
+      allChunks = [...primaryResult.chunks];
+      trace = [...primaryResult.trace];
+    }
     
     // If follow-up, also search with original query to get more context
     if (isFollowUp && searchQueries.length > 1) {
@@ -774,12 +796,12 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       send('step', { label: 'No relevant documents found - Using general knowledge' });
       
       try {
-        for await (const chunk of OpenAIService.streamGeneralAnswer(effectiveQuery, conversationHistory)) {
+        for await (const chunk of OpenAIService.streamGeneralAnswer(effectiveQuery, conversationHistory, mode === 'fast')) {
           send('answer', { partial: chunk });
         }
         
         // Get full answer for storage
-        const fullResult = await OpenAIService.generateGeneralAnswer(effectiveQuery, conversationHistory);
+        const fullResult = await OpenAIService.generateGeneralAnswer(effectiveQuery, conversationHistory, mode === 'fast');
         
         // Step 7: finalize and persist
         await DatabaseService.logSearchQuery(query, 0, 70, 0);
@@ -817,8 +839,8 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       }
     }
     
-    // Generate answer from documents
-    const result = await AgentService.answer(effectiveQuery, allChunks, conversationHistory);
+    // Generate answer from documents with the selected mode
+    const result = await AgentService.answer(effectiveQuery, allChunks, conversationHistory, mode);
     
     // Check if confidence is too low - fallback to OpenAI
     if (result.confidence < CONFIDENCE_THRESHOLD && OpenAIService.isConfigured()) {
@@ -828,12 +850,12 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       
       try {
         // Stream answer from OpenAI
-        for await (const chunk of OpenAIService.streamGeneralAnswer(effectiveQuery, conversationHistory)) {
+        for await (const chunk of OpenAIService.streamGeneralAnswer(effectiveQuery, conversationHistory, mode === 'fast')) {
           send('answer', { partial: chunk });
         }
         
         // Get full answer for storage
-        const fullResult = await OpenAIService.generateGeneralAnswer(effectiveQuery, conversationHistory);
+        const fullResult = await OpenAIService.generateGeneralAnswer(effectiveQuery, conversationHistory, mode === 'fast');
         
         // Step 7: finalize and persist with general knowledge flag
         await DatabaseService.logSearchQuery(query, allChunks.length, 70, 0);

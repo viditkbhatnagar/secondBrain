@@ -8,6 +8,11 @@ interface ThinkingIndicatorProps {
   stage: ThinkingStage;
   documentCount?: number;
   foundCount?: number;
+  smartSearch?: {
+    enabled: boolean;
+    categories: string[];
+    searchedDocs: number;
+  };
 }
 
 const stages = [
@@ -45,6 +50,7 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
   stage,
   documentCount = 0,
   foundCount = 0,
+  smartSearch,
 }) => {
   const currentStageIndex = stages.findIndex((s) => s.key === stage);
   const current = stages[currentStageIndex] || stages[0];
@@ -53,6 +59,10 @@ export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
   const getText = () => {
     switch (stage) {
       case 'searching':
+        if (smartSearch?.enabled && smartSearch.searchedDocs > 0) {
+          const categoryName = smartSearch.categories[0] || 'relevant';
+          return `Searching ${smartSearch.searchedDocs} docs in "${categoryName}"...`;
+        }
         return `Searching through ${documentCount} documents...`;
       case 'found':
         return `Found ${foundCount} relevant sections`;

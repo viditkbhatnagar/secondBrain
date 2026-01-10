@@ -15,6 +15,7 @@ export interface IDocument extends Document {
     candidates?: Array<{ label: string; confidence: number }>;
   };
   entities?: Array<{ type: string; text: string; value?: string; start?: number; end?: number }>;
+  category?: string;              // Smart KB category (e.g., "SSM", "Knights", "OTHM")
   wordCount: number;
   characters: number;
   chunkCount: number;
@@ -70,6 +71,20 @@ export interface ISavedSearch extends Document {
   createdAt: Date;
   alertFrequency?: 'daily' | 'weekly' | 'monthly';
   lastRunAt?: Date;
+}
+
+// Dynamic categories for smart KB classification
+export interface ICategory extends Document {
+  id: string;
+  name: string;                    // e.g., "SSM", "Knights", "OTHM"
+  description: string;             // AI-generated description of what this category contains
+  keywords: string[];              // Key terms that identify this category
+  documentCount: number;           // Number of documents in this category
+  sampleDocuments: string[];       // Sample document IDs for reference
+  embedding?: number[];            // Category embedding for semantic matching
+  createdAt: Date;
+  updatedAt: Date;
+  isActive: boolean;
 }
 
 // Chat thread and message models
@@ -129,6 +144,7 @@ const DocumentSchema = new Schema<IDocument>({
     candidates: [{ label: String, confidence: Number }]
   },
   entities: [{ type: { type: String }, text: String, value: String, start: Number, end: Number }],
+  category: { type: String, index: true },  // Smart KB category
   wordCount: { type: Number, required: true, index: true },
   characters: { type: Number, required: true },
   chunkCount: { type: Number, required: true },
@@ -261,6 +277,25 @@ const SavedSearchSchema = new Schema<ISavedSearch>({
 });
 
 export const SavedSearchModel = mongoose.model<ISavedSearch>('SavedSearch', SavedSearchSchema);
+
+// Category schema for smart KB classification
+const CategorySchema = new Schema<ICategory>({
+  id: { type: String, required: true, unique: true, index: true },
+  name: { type: String, required: true, unique: true, index: true },
+  description: { type: String, required: true },
+  keywords: [{ type: String, index: true }],
+  documentCount: { type: Number, default: 0 },
+  sampleDocuments: [{ type: String }],
+  embedding: [{ type: Number }],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+  isActive: { type: Boolean, default: true, index: true }
+});
+
+// Text index for keyword search on categories
+CategorySchema.index({ name: 'text', description: 'text', keywords: 'text' });
+
+export const CategoryModel = mongoose.model<ICategory>('Category', CategorySchema);
 
 // Helper function to connect to MongoDB
 export const connectDB = async (): Promise<void> => {

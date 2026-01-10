@@ -1,6 +1,7 @@
 import { GptService, RelevantChunk } from './GptService';
 import { DocumentChunk } from './FileProcessor';
 import { DocumentChunkModel, DocumentModel } from '../models/index';
+import { QueryClassifierService, QueryClassification } from './QueryClassifierService';
 
 export interface StoredVector {
   id: string;
@@ -218,6 +219,149 @@ export class VectorService {
     // Use first 100 chars + last 100 chars as fingerprint
     const normalized = content.toLowerCase().replace(/\s+/g, ' ').trim();
     return normalized.slice(0, 100) + '|' + normalized.slice(-100);
+  }
+
+  /**
+   * SMART SEARCH: Category-aware search that only searches relevant documents
+   * This is the main performance optimization - reduces search space significantly
+   */
+  static async searchSimilarSmart(
+    query: string,
+    options?: {
+      limit?: number;
+      minSimilarity?: number;
+      enableFallback?: boolean;
+      forceAllDocuments?: boolean;  // Skip category filtering
+    }
+  ): Promise<{ chunks: RelevantChunk[]; classification: QueryClassification; searchedDocuments: number }> {
+    const limit = options?.limit ?? 5;
+    const minSimilarity = options?.minSimilarity ?? SIMILARITY_THRESHOLD;
+    const enableFallback = options?.enableFallback ?? true;
+    const forceAll = options?.forceAllDocuments ?? false;
+
+    const startTime = Date.now();
+
+    // Step 1: Classify the query to determine which categories to search
+    let classification: QueryClassification;
+    if (forceAll) {
+      classification = {
+        categories: [],
+        confidence: 1.0,
+        shouldSearchAll: true,
+        reasoning: 'Forced full search'
+      };
+    } else {
+      classification = await QueryClassifierService.classifyQuery(query);
+    }
+
+    // Step 2: Get document IDs to search based on classification
+    let docIdsToSearch: string[] = [];
+    let searchedDocuments = 0;
+
+    if (classification.shouldSearchAll || classification.categories.length === 0) {
+      // Search all documents
+      const allDocs = await DocumentModel.find({}, { id: 1 }).exec();
+      docIdsToSearch = allDocs.map(d => d.id);
+      searchedDocuments = docIdsToSearch.length;
+      console.log(`🔍 Smart search: Searching ALL ${searchedDocuments} documents (no category match)`);
+    } else {
+      // Search only documents in matched categories
+      const categoryDocs = await DocumentModel.find(
+        { category: { $in: classification.categories } },
+        { id: 1 }
+      ).exec();
+      docIdsToSearch = categoryDocs.map(d => d.id);
+      searchedDocuments = docIdsToSearch.length;
+
+      const totalDocs = await DocumentModel.countDocuments().exec();
+      console.log(`🎯 Smart search: Searching ${searchedDocuments}/${totalDocs} documents in categories: ${classification.categories.join(', ')}`);
+    }
+
+    // Step 3: Search within the filtered documents
+    let chunks: RelevantChunk[];
+
+    if (docIdsToSearch.length === 0) {
+      chunks = [];
+    } else if (classification.shouldSearchAll) {
+      // Use regular search for all documents
+      chunks = await this.searchSimilar(query, limit, minSimilarity, enableFallback);
+    } else {
+      // Use filtered search
+      chunks = await this.searchSimilarWithinDocs(query, docIdsToSearch, limit, minSimilarity, enableFallback);
+    }
+
+    const elapsed = Date.now() - startTime;
+    console.log(`⚡ Smart search completed in ${elapsed}ms (searched ${searchedDocuments} docs, found ${chunks.length} chunks)`);
+
+    return {
+      chunks,
+      classification,
+      searchedDocuments
+    };
+  }
+
+  /**
+   * Search within specific document IDs with fallback support
+   */
+  private static async searchSimilarWithinDocs(
+    query: string,
+    docIds: string[],
+    limit: number,
+    minSimilarity: number,
+    enableFallback: boolean
+  ): Promise<RelevantChunk[]> {
+    try {
+      if (!query.trim() || docIds.length === 0) return [];
+
+      const queryEmbedding = await GptService.generateEmbedding(query);
+      const chunks = await DocumentChunkModel.find({ documentId: { $in: docIds } }).exec();
+
+      if (chunks.length === 0) return [];
+
+      const allSimilarities: Array<{ chunk: any; similarity: number }> = [];
+      const aboveThreshold: Array<{ chunk: any; similarity: number }> = [];
+
+      for (const chunk of chunks) {
+        if (!chunk.embedding || chunk.embedding.length === 0) continue;
+
+        const similarity = this.cosineSimilarity(queryEmbedding, chunk.embedding);
+        allSimilarities.push({ chunk, similarity });
+
+        if (similarity >= minSimilarity) {
+          aboveThreshold.push({ chunk, similarity });
+        }
+      }
+
+      allSimilarities.sort((a, b) => b.similarity - a.similarity);
+      aboveThreshold.sort((a, b) => b.similarity - a.similarity);
+
+      const deduplicated = this.deduplicateResults(aboveThreshold);
+      const topResults = deduplicated.slice(0, limit);
+
+      // Fallback if no results meet threshold
+      if (topResults.length === 0 && enableFallback && allSimilarities.length > 0) {
+        const fallbackDeduplicated = this.deduplicateResults(allSimilarities);
+        return fallbackDeduplicated.slice(0, 3).map(result => ({
+          content: result.chunk.content,
+          documentName: result.chunk.documentName,
+          documentId: result.chunk.documentId,
+          chunkId: result.chunk.chunkId,
+          similarity: result.similarity,
+          lowConfidence: true
+        }));
+      }
+
+      return topResults.map(result => ({
+        content: result.chunk.content,
+        documentName: result.chunk.documentName,
+        documentId: result.chunk.documentId,
+        chunkId: result.chunk.chunkId,
+        similarity: result.similarity
+      }));
+    } catch (error: any) {
+      console.error('Error in searchSimilarWithinDocs:', error);
+      return [];
+    }
   }
 
   /** Search restricted to a set of documentIds */

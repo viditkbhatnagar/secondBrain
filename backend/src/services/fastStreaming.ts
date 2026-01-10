@@ -127,15 +127,48 @@ export class FastStreamingService {
 
   private buildFastPrompt(query: string, sources: any[]): string {
     const sourcesText = sources
-      .map((s, i) => `[Source ${i + 1}: ${s.documentName}]\n${s.content}`)
+      .map((s, i) => `[Source ${i + 1}: ${s.documentName}]
+${s.content}`)
       .join('\n\n---\n\n');
 
-    return `Based on these sources, answer the question. Cite your sources.
+    return `You are a high-speed research assistant optimized for rapid, accurate responses. Provide a concise yet comprehensive answer based on the retrieved sources.
 
-SOURCES:
+========================================
+SOURCES
+========================================
 ${sourcesText}
 
-QUESTION: ${query}
+========================================
+QUESTION
+========================================
+${query}
+
+========================================
+RESPONSE REQUIREMENTS
+========================================
+
+SPEED & EFFICIENCY:
+- Get to the point immediately - no preambles
+- Prioritize the most relevant information first
+- Be concise while maintaining completeness
+- Avoid redundant explanations
+
+ACCURACY & GROUNDING:
+- Use ONLY information from provided sources
+- Present information clearly without source citations
+- If information is missing, state: "Not found in provided sources"
+- Never speculate or infer beyond source content
+
+STRUCTURE:
+- Lead with direct answer to the question
+- Use bullet points for lists and multiple items
+- Include ALL relevant details from sources (don't summarize away important info)
+- Organize logically for quick comprehension
+
+CONTENT PRESENTATION:
+- NO source citations needed
+- For quotes: "exact text"
+- Synthesize information seamlessly
 
 ANSWER:`;
   }

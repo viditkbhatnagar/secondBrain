@@ -38,6 +38,7 @@ export interface CreateDocumentInput {
     candidates?: Array<{ label: string; confidence: number }>;
   };
   entities?: Array<{ type: string; text: string; value?: string; start?: number; end?: number }>;
+  category?: string; // Smart KB category
   metadata: {
     pageCount?: number;
     wordCount: number;
@@ -79,6 +80,7 @@ export class DatabaseService {
         topics: input.topics || [],
         classification: input.classification,
         entities: input.entities || [],
+        category: input.category, // Smart KB category
         wordCount: input.metadata.wordCount,
         characters: input.metadata.characters,
         chunkCount: input.chunkCount,

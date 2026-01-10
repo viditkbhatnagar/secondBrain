@@ -175,6 +175,90 @@ documentsRouter.get('/classified', async (_req, res) => {
 
 /**
  * @swagger
+ * /documents/by-category:
+ *   get:
+ *     summary: Get documents grouped by smart KB category
+ *     description: Returns documents organized by their smart KB categories (SSM, OTHM, etc.)
+ *     tags: [Documents]
+ *     responses:
+ *       200:
+ *         description: Documents grouped by category
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 categories:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       name:
+ *                         type: string
+ *                       count:
+ *                         type: number
+ *                       documents:
+ *                         type: array
+ */
+documentsRouter.get('/by-category', async (_req, res) => {
+  try {
+    const { DocumentModel, CategoryModel } = await import('../models/index');
+
+    // Get all categories with their info
+    const categories = await (CategoryModel as any).find({ isActive: true }).lean();
+
+    // Group documents by category
+    const grouped = await (DocumentModel as any).aggregate([
+      {
+        $group: {
+          _id: { $ifNull: ['$category', 'uncategorized'] },
+          documents: {
+            $push: {
+              id: '$id',
+              originalName: '$originalName',
+              summary: '$summary',
+              topics: '$topics',
+              wordCount: '$wordCount',
+              chunkCount: '$chunkCount',
+              uploadedAt: '$uploadedAt',
+              mimeType: '$mimeType'
+            }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    // Enrich with category metadata
+    const result = grouped.map((group: any) => {
+      const categoryInfo = categories.find((c: any) => c.name === group._id);
+      return {
+        name: group._id,
+        displayName: categoryInfo?.name || group._id,
+        description: categoryInfo?.description || '',
+        keywords: categoryInfo?.keywords || [],
+        count: group.count,
+        documents: group.documents.sort((a: any, b: any) =>
+          new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+        )
+      };
+    });
+
+    res.json({
+      success: true,
+      totalDocuments: result.reduce((sum: number, g: any) => sum + g.count, 0),
+      totalCategories: result.length,
+      categories: result
+    });
+  } catch (error) {
+    console.error('Error fetching documents by category:', error);
+    res.status(500).json({ error: 'Failed to fetch documents by category' });
+  }
+});
+
+/**
+ * @swagger
  * /documents/entities:
  *   get:
  *     summary: Get entity aggregations

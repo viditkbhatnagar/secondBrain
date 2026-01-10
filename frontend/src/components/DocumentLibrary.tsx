@@ -1,8 +1,18 @@
-import React, { useState, useRef, useMemo, useCallback, memo } from 'react';
+import React, { useState, useRef, useMemo, useCallback, memo, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { FileText, Trash2, Calendar, Hash, Tag, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, Trash2, Calendar, Hash, Tag, ChevronDown, ChevronUp, FolderOpen, Folder, LayoutGrid, List } from 'lucide-react';
 import { Document } from '../App';
 import { Card, Badge, EmptyState } from './ui';
+import { API_ENDPOINTS } from '../config/api';
+
+interface CategoryGroup {
+  name: string;
+  displayName: string;
+  description: string;
+  keywords: string[];
+  count: number;
+  documents: Document[];
+}
 
 interface DocumentLibraryProps {
   documents: Document[];
@@ -130,14 +140,134 @@ const DocumentRow = memo(({
 
 DocumentRow.displayName = 'DocumentRow';
 
-export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({ 
-  documents, 
-  onDeleteDocument 
+// Category section component
+const CategorySection = memo(({
+  category,
+  isExpanded,
+  onToggle,
+  onDeleteDocument,
+  expandedDocuments,
+  onToggleDocument,
+  formatDate,
+  formatWordCount,
+  formatBytes,
+  getFileIcon
+}: {
+  category: CategoryGroup;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onDeleteDocument: (id: string, name: string) => void;
+  expandedDocuments: Set<string>;
+  onToggleDocument: (id: string) => void;
+  formatDate: (date: string) => string;
+  formatWordCount: (count: number) => string;
+  formatBytes: (bytes?: number) => string;
+  getFileIcon: (filename: string) => React.ReactNode;
+}) => (
+  <div className="mb-4">
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-primary-50 to-accent-50 dark:from-primary-900/20 dark:to-accent-900/20 rounded-lg hover:from-primary-100 hover:to-accent-100 dark:hover:from-primary-900/30 dark:hover:to-accent-900/30 transition-colors"
+    >
+      <div className="flex items-center gap-3">
+        {isExpanded ? (
+          <FolderOpen className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+        ) : (
+          <Folder className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+        )}
+        <div className="text-left">
+          <h3 className="text-sm font-semibold text-secondary-900 dark:text-secondary-100 capitalize">
+            {category.displayName}
+          </h3>
+          {category.description && (
+            <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-0.5 line-clamp-1">
+              {category.description}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <Badge variant="primary" size="sm">
+          {category.count} {category.count === 1 ? 'doc' : 'docs'}
+        </Badge>
+        {isExpanded ? (
+          <ChevronUp className="h-4 w-4 text-secondary-400" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-secondary-400" />
+        )}
+      </div>
+    </button>
+
+    {isExpanded && (
+      <Card variant="outlined" padding="none" className="mt-2 ml-4 border-l-2 border-primary-200 dark:border-primary-700">
+        {category.documents.map((document) => (
+          <DocumentRow
+            key={document.id}
+            document={document}
+            isExpanded={expandedDocuments.has(document.id)}
+            onToggleExpand={() => onToggleDocument(document.id)}
+            onDelete={() => onDeleteDocument(document.id, document.originalName)}
+            formatDate={formatDate}
+            formatWordCount={formatWordCount}
+            formatBytes={formatBytes}
+            getFileIcon={getFileIcon}
+          />
+        ))}
+      </Card>
+    )}
+  </div>
+));
+
+CategorySection.displayName = 'CategorySection';
+
+export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
+  documents,
+  onDeleteDocument
 }) => {
   const [expandedDocuments, setExpandedDocuments] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['uncategorized']));
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'size'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [viewMode, setViewMode] = useState<'category' | 'list'>('category');
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
+  const [loading, setLoading] = useState(false);
   const parentRef = useRef<HTMLDivElement>(null);
+
+  // Fetch documents by category
+  useEffect(() => {
+    const fetchByCategory = async () => {
+      if (viewMode !== 'category') return;
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_ENDPOINTS.documents}/by-category`);
+        const data = await res.json();
+        if (data.success && data.categories) {
+          setCategoryGroups(data.categories);
+          // Auto-expand first category
+          if (data.categories.length > 0) {
+            setExpandedCategories(new Set([data.categories[0].name]));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchByCategory();
+  }, [viewMode, documents.length]); // Re-fetch when documents change
+
+  const toggleCategory = useCallback((categoryName: string) => {
+    setExpandedCategories(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(categoryName)) {
+        newExpanded.delete(categoryName);
+      } else {
+        newExpanded.add(categoryName);
+      }
+      return newExpanded;
+    });
+  }, []);
 
   const toggleExpanded = useCallback((documentId: string) => {
     setExpandedDocuments(prev => {
@@ -182,9 +312,9 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
   }, []);
 
   const getFileIcon = useCallback((filename: string) => {
-    const extension = filename.split('.').pop()?.toLowerCase();
+    const extension = (filename || '').split('.').pop()?.toLowerCase();
     const iconClass = "h-5 w-5";
-    
+
     switch (extension) {
       case 'pdf':
         return <FileText className={`${iconClass} text-red-500`} />;
@@ -245,43 +375,106 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100">Document Library</h2>
           <p className="text-secondary-600 dark:text-secondary-400 mt-1">
-            {documents.length} {documents.length === 1 ? 'document' : 'documents'} in your knowledge base
+            {documents.length} {documents.length === 1 ? 'document' : 'documents'} in {categoryGroups.length} {categoryGroups.length === 1 ? 'category' : 'categories'}
           </p>
         </div>
-        
-        {/* Sort Controls */}
-        <div className="flex items-center space-x-2">
-          <label className="text-sm text-secondary-700 dark:text-secondary-300">Sort by:</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'date' | 'name' | 'size')}
-            className="text-sm border border-secondary-300 dark:border-secondary-600 rounded-md px-2 py-1 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="date">Date</option>
-            <option value="name">Name</option>
-            <option value="size">Size</option>
-          </select>
-          <button
-            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-            className="text-sm text-secondary-600 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-secondary-100"
-          >
-            {sortOrder === 'asc' ? '↑' : '↓'}
-          </button>
+
+        {/* View Mode & Sort Controls */}
+        <div className="flex items-center space-x-4">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-secondary-100 dark:bg-secondary-800 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('category')}
+              className={`p-2 rounded-md transition-colors ${
+                viewMode === 'category'
+                  ? 'bg-white dark:bg-secondary-700 text-primary-600 shadow-sm'
+                  : 'text-secondary-500 hover:text-secondary-700'
+              }`}
+              title="Category View"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-md transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-white dark:bg-secondary-700 text-primary-600 shadow-sm'
+                  : 'text-secondary-500 hover:text-secondary-700'
+              }`}
+              title="List View"
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Sort Controls (only in list view) */}
+          {viewMode === 'list' && (
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-secondary-700 dark:text-secondary-300">Sort:</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'date' | 'name' | 'size')}
+                className="text-sm border border-secondary-300 dark:border-secondary-600 rounded-md px-2 py-1 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="date">Date</option>
+                <option value="name">Name</option>
+                <option value="size">Size</option>
+              </select>
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className="text-sm text-secondary-600 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-secondary-100"
+              >
+                {sortOrder === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Documents List */}
-      {documents.length === 0 ? (
-        <EmptyState
-          icon={<FileText className="h-12 w-12" />}
-          title="No documents yet"
-          description="Upload your first document to start building your knowledge base"
-        />
-      ) : useVirtual ? (
+      {/* Category View */}
+      {viewMode === 'category' && (
+        <div className="space-y-2">
+          {loading ? (
+            <div className="text-center py-8 text-secondary-500">Loading categories...</div>
+          ) : categoryGroups.length === 0 ? (
+            <EmptyState
+              icon={<Folder className="h-12 w-12" />}
+              title="No categories yet"
+              description="Upload documents to automatically categorize them"
+            />
+          ) : (
+            categoryGroups.map((category) => (
+              <CategorySection
+                key={category.name}
+                category={category}
+                isExpanded={expandedCategories.has(category.name)}
+                onToggle={() => toggleCategory(category.name)}
+                onDeleteDocument={handleDelete}
+                expandedDocuments={expandedDocuments}
+                onToggleDocument={toggleExpanded}
+                formatDate={formatDate}
+                formatWordCount={formatWordCount}
+                formatBytes={formatBytes}
+                getFileIcon={getFileIcon}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {/* List View */}
+      {viewMode === 'list' && (
+        documents.length === 0 ? (
+          <EmptyState
+            icon={<FileText className="h-12 w-12" />}
+            title="No documents yet"
+            description="Upload your first document to start building your knowledge base"
+          />
+        ) : useVirtual ? (
         // Virtual scrolling for large lists
         <Card variant="outlined" padding="none">
           <div
@@ -341,6 +534,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
             />
           ))}
         </Card>
+        )
       )}
     </div>
   );

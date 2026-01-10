@@ -7,7 +7,7 @@ import { ThreadSidebar } from './ThreadSidebar';
 import { MessageBubble } from './MessageBubble';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { WelcomeState } from './WelcomeState';
-import { ChatInput } from './ChatInput';
+import { ChatInput, ResponseMode } from './ChatInput';
 import { useToast } from '../ui';
 
 export const ChatPage: React.FC = () => {
@@ -24,6 +24,11 @@ export const ChatPage: React.FC = () => {
   const [foundCount, setFoundCount] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [smartSearchInfo, setSmartSearchInfo] = useState<{
+    enabled: boolean;
+    categories: string[];
+    searchedDocs: number;
+  }>({ enabled: false, categories: [], searchedDocs: 0 });
 
   // Refs
   const endRef = useRef<HTMLDivElement>(null);
@@ -117,8 +122,9 @@ export const ChatPage: React.FC = () => {
     }
   };
 
-  const startStream = async (prompt: string, threadId?: string) => {
+  const startStream = async (prompt: string, mode: ResponseMode, threadId?: string) => {
     setThinkingStage('understanding');
+    setSmartSearchInfo({ enabled: false, categories: [], searchedDocs: 0 }); // Reset smart search info
     let sources: SourceInfo[] = [];
     let confidence = 75;
     const isFirstMessage = !threadId;
@@ -132,6 +138,8 @@ export const ChatPage: React.FC = () => {
         query: prompt,
         strategy,
         rerank: String(rerank),
+        mode: mode, // Add mode parameter
+        smart: 'true', // Enable smart category-based search for faster responses
       });
       if (threadId) {
         params.set('threadId', threadId);
@@ -184,7 +192,15 @@ export const ChatPage: React.FC = () => {
 
             case 'step':
               // Update thinking stages based on step
-              if (data.label?.includes('Searching') || data.label?.includes('stored')) {
+              if (data.label?.includes('Smart search')) {
+                // Smart search detected - update info
+                setSmartSearchInfo({
+                  enabled: true,
+                  categories: data.detail?.categories || [],
+                  searchedDocs: data.detail?.searchedDocuments || 0,
+                });
+                setThinkingStage('searching');
+              } else if (data.label?.includes('Searching') || data.label?.includes('stored')) {
                 setThinkingStage('searching');
               } else if (data.label?.includes('found')) {
                 setThinkingStage('found');
@@ -292,7 +308,7 @@ export const ChatPage: React.FC = () => {
     }
   };
 
-  const handleSend = async () => {
+  const handleSend = async (mode: ResponseMode = 'fast') => {
     const text = input.trim();
     if (!text || isSending || thinkingStage) return;
 
@@ -302,7 +318,7 @@ export const ChatPage: React.FC = () => {
     setInput('');
 
     try {
-      await startStream(text, activeThreadId || undefined);
+      await startStream(text, mode, activeThreadId || undefined);
     } finally {
       setIsSending(false);
     }
@@ -444,6 +460,7 @@ export const ChatPage: React.FC = () => {
                   stage={thinkingStage}
                   documentCount={documentCount}
                   foundCount={foundCount}
+                  smartSearch={smartSearchInfo}
                 />
               )}
 

@@ -35,7 +35,8 @@ export class OpenAIService {
    */
   static async generateGeneralAnswer(
     question: string,
-    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
+    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    concise: boolean = false
   ): Promise<GeneralAnswer> {
     if (!this.isConfigured()) {
       throw new Error('OpenAI API key not configured');
@@ -43,28 +44,28 @@ export class OpenAIService {
 
     try {
       const openai = getOpenAIClient();
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        {
-          role: 'system',
-          content: `You are a helpful AI assistant providing comprehensive, detailed general knowledge answers.
+      const systemPrompt = concise 
+        ? `You are a helpful AI assistant providing concise, accurate answers.
+
+IMPORTANT GUIDELINES:
+- Provide brief, to-the-point answers in 2-4 sentences
+- Be accurate and informative
+- Use **bold** for key points if needed
+- Use bullet points (- item) for lists when appropriate
+- Focus on directly answering the question`
+        : `You are a helpful AI assistant providing comprehensive, detailed general knowledge answers.
 
 IMPORTANT GUIDELINES:
 - Provide VERY DETAILED and THOROUGH responses
 - Cover the topic from multiple angles and perspectives
 - Include relevant examples, explanations, and context
 - Break down complex topics into understandable parts
-- Use line breaks and bullet points for better readability
-- Be comprehensive - don't hold back on information
-- Cost is not a concern, prioritize quality and completeness
+- Use line breaks and bullet points for better readability`;
 
-FORMATTING RULES:
-- Do NOT use markdown formatting (no **, no ##, no *, no backticks)
-- Use plain text only
-- For emphasis, use quotation marks like "important term" instead of **bold**
-- Use simple punctuation: periods, commas, question marks, exclamation points
-- Use line breaks generously for better readability
-- Use bullet points with • symbol when listing items
-- Write in a natural, conversational yet professional tone`
+      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        {
+          role: 'system',
+          content: systemPrompt
         }
       ];
 
@@ -84,23 +85,19 @@ FORMATTING RULES:
         content: question
       });
 
+      // Use gpt-4o-mini for concise mode - fast, reliable, and returns actual content
+      const selectedModel = concise ? 'gpt-4o-mini' : this.model;
+      const maxTokens = concise ? 500 : 8000;
+
       const response = await openai.chat.completions.create({
-        model: this.model,
+        model: selectedModel,
         messages,
-        max_completion_tokens: 8000, // Increased for very detailed responses
+        max_completion_tokens: maxTokens,
         temperature: 1,
       });
 
       let answer = response.choices[0]?.message?.content || 'I apologize, but I was unable to generate a response.';
       const tokensUsed = response.usage?.total_tokens || 0;
-      
-      // Clean up any markdown that slipped through
-      answer = answer
-        .replace(/\*\*([^*]+)\*\*/g, '"$1"')  // **bold** -> "bold"
-        .replace(/\*([^*]+)\*/g, '$1')         // *italic* -> plain
-        .replace(/`([^`]+)`/g, '"$1"')         // `code` -> "code"
-        .replace(/^#+\s*/gm, '')               // Remove headers
-        .replace(/^[-*]\s+/gm, '• ');          // Convert list markers to bullets
 
       return {
         answer,
@@ -119,17 +116,24 @@ FORMATTING RULES:
    */
   static async *streamGeneralAnswer(
     question: string,
-    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
+    conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    concise: boolean = false
   ): AsyncGenerator<string, void, unknown> {
     if (!this.isConfigured()) {
       throw new Error('OpenAI API key not configured');
     }
 
     const openai = getOpenAIClient();
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: `You are a helpful AI assistant providing comprehensive, detailed general knowledge answers.
+    const systemPrompt = concise 
+      ? `You are a helpful AI assistant providing concise, accurate answers.
+
+IMPORTANT GUIDELINES:
+- Provide brief, to-the-point answers in 2-4 sentences
+- Be accurate and informative
+- Use **bold** for key points if needed
+- Use bullet points (- item) for lists when appropriate
+- Focus on directly answering the question`
+      : `You are a helpful AI assistant providing comprehensive, detailed general knowledge answers.
 
 IMPORTANT GUIDELINES:
 - Provide VERY DETAILED and THOROUGH responses
@@ -137,17 +141,12 @@ IMPORTANT GUIDELINES:
 - Include relevant examples, explanations, and context
 - Break down complex topics into understandable parts
 - Use line breaks and bullet points for better readability
-- Be comprehensive - don't hold back on information
-- Cost is not a concern, prioritize quality and completeness
+- Be comprehensive - don't hold back on information`;
 
-FORMATTING RULES:
-- Do NOT use markdown formatting (no **, no ##, no *, no backticks)
-- Use plain text only
-- For emphasis, use quotation marks like "important term" instead of **bold**
-- Use simple punctuation: periods, commas, question marks, exclamation points
-- Use line breaks generously for better readability
-- Use bullet points with • symbol when listing items
-- Write in a natural, conversational yet professional tone`
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      {
+        role: 'system',
+        content: systemPrompt
       }
     ];
 
@@ -165,10 +164,14 @@ FORMATTING RULES:
       content: question
     });
 
+    // Use gpt-4o-mini for concise mode - fast, reliable, and returns actual content
+    const selectedModel = concise ? 'gpt-4o-mini' : this.model;
+    const maxTokens = concise ? 500 : 8000;
+
     const stream = await openai.chat.completions.create({
-      model: this.model,
+      model: selectedModel,
       messages,
-      max_completion_tokens: 8000, // Increased for very detailed responses
+      max_completion_tokens: maxTokens,
       temperature: 1,
       stream: true,
     });

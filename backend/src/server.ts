@@ -29,6 +29,7 @@ import { healthRouter } from './routes/health';
 import analyticsRouter from './routes/analytics';
 import ultimateSearchRouter from './routes/ultimateSearch';
 import { blazingSearchRouter } from './routes/blazingSearch';
+import { categoryRouter } from './routes/categories';
 import { DatabaseService } from './services/DatabaseService';
 import { VectorService } from './services/VectorService';
 import { GptService } from './services/GptService';
@@ -181,6 +182,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/graph', graphRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/categories', categoryRouter); // Smart KB category management
 app.use('/api/search', ultimateSearchRouter);
 
 // Swagger API documentation

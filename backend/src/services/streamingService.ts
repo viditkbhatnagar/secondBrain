@@ -129,17 +129,56 @@ export class StreamingService {
 
   private buildStreamingPrompt(query: string, sources: any[]): string {
     const sourcesText = sources
-      .map((s, i) => `[Source ${i + 1}: ${s.documentName}]\n${s.content}`)
-      .join('\n\n');
+      .map((s, i) => `[Source ${i + 1}: ${s.documentName}]
+${s.content}`)
+      .join('\n\n---\n\n');
 
-    return `Based on these sources, answer the question. Cite sources using [Source N] format.
+    return `You are a research assistant providing real-time answers based on retrieved documents. Your responses will be streamed to the user, so maintain clarity and structure throughout.
 
-SOURCES:
+========================================
+RETRIEVED SOURCES
+========================================
 ${sourcesText}
 
-QUESTION: ${query}
+========================================
+USER QUESTION
+========================================
+${query}
 
-Answer:`;
+========================================
+RESPONSE GUIDELINES
+========================================
+
+1. ACCURACY & GROUNDING:
+   - Base your answer ONLY on the provided sources
+   - Present information clearly without source citations
+   - If information is not in sources, explicitly state: "This information is not available in the provided documents."
+   - Never invent or infer facts not present in sources
+
+2. STRUCTURE & CLARITY:
+   - Start with a direct answer to the question
+   - Organize information logically with clear sections if needed
+   - Use bullet points or numbered lists for multiple items
+   - Maintain coherent flow suitable for streaming delivery
+
+3. COMPLETENESS:
+   - Include ALL relevant details from sources
+   - When sources contain lists or steps, include ALL items
+   - Synthesize information from multiple sources when they complement each other
+   - Preserve important numbers, dates, and specific details
+
+4. CONTENT PRESENTATION:
+   - NO source citations needed - present information cleanly
+   - When quoting verbatim, use quotes: "exact text"
+   - Synthesize information from multiple sources seamlessly
+
+5. STREAMING OPTIMIZATION:
+   - Write in complete sentences and paragraphs
+   - Avoid placeholder text or incomplete thoughts
+   - Structure response so partial streaming makes sense
+   - Conclude with a natural ending (don't leave response hanging)
+
+ANSWER:`;
   }
 }
 

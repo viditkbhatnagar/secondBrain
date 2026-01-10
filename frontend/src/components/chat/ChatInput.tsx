@@ -1,11 +1,13 @@
-import React, { useRef, useEffect } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Sparkles, Loader2, Zap, FileText } from 'lucide-react';
 import { Button } from '../ui';
+
+export type ResponseMode = 'fast' | 'detail';
 
 interface ChatInputProps {
   value: string;
   onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (mode: ResponseMode) => void;
   isLoading: boolean;
   strategy?: 'hybrid' | 'vector';
   onStrategyChange?: (strategy: 'hybrid' | 'vector') => void;
@@ -22,6 +24,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   disabled,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [mode, setMode] = useState<ResponseMode>('fast');
 
   // Auto-resize textarea
   useEffect(() => {
@@ -36,8 +39,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!isLoading && value.trim()) {
-        onSend();
+        onSend(mode);
       }
+    }
+  };
+
+  const handleSendClick = () => {
+    if (!isLoading && value.trim()) {
+      onSend(mode);
     }
   };
 
@@ -65,9 +74,43 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             )}
           </div>
 
+          {/* Mode Toggle */}
+          <div className="flex items-end">
+            <div className="flex bg-secondary-100 dark:bg-secondary-800 rounded-lg p-1 shadow-sm border border-secondary-200 dark:border-secondary-700">
+              <button
+                type="button"
+                onClick={() => setMode('fast')}
+                disabled={disabled || isLoading}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                  mode === 'fast'
+                    ? 'bg-white dark:bg-secondary-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                    : 'text-secondary-600 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-secondary-200'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title="Fast mode - Quick, concise answers"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Fast</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('detail')}
+                disabled={disabled || isLoading}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                  mode === 'detail'
+                    ? 'bg-white dark:bg-secondary-700 text-primary-600 dark:text-primary-400 shadow-sm'
+                    : 'text-secondary-600 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-secondary-200'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title="Detail mode - Comprehensive, structured answers"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Detail</span>
+              </button>
+            </div>
+          </div>
+
           <Button
             variant="primary"
-            onClick={onSend}
+            onClick={handleSendClick}
             disabled={disabled || isLoading || !value.trim()}
             isLoading={isLoading}
             className="px-5 shadow-sm self-end"
@@ -79,7 +122,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         {/* Helper text */}
         <p className="text-xs text-secondary-400 dark:text-secondary-500 mt-2 text-center">
-          Press Enter to send, Shift+Enter for new line
+          Press Enter to send • Shift+Enter for new line • Toggle Fast/Detail mode per message
         </p>
       </div>
     </div>

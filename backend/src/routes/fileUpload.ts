@@ -6,6 +6,7 @@ import { GptService } from '../services/GptService';
 import { ClassificationService } from '../services/ClassificationService';
 import { NerService } from '../services/NerService';
 import { analyticsService } from '../services/AnalyticsService';
+import { CategoryService } from '../services/CategoryService';
 
 export const fileUploadRouter = express.Router();
 
@@ -81,6 +82,27 @@ fileUploadRouter.post('/', async (req, res) => {
       processedDocument.originalName
     );
 
+    // Smart KB categorization - suggest category for the document
+    const categorySuggestion = await CategoryService.suggestCategory(
+      processedDocument.content,
+      processedDocument.originalName
+    );
+
+    // If user provided a category override in the request, use that instead
+    const userCategory = req.body?.category;
+    const finalCategory = userCategory || categorySuggestion.category;
+
+    // If this is a new category being created, create it
+    if (categorySuggestion.isNew && !userCategory) {
+      await CategoryService.createCategory(
+        categorySuggestion.category,
+        categorySuggestion.description || `Documents about ${categorySuggestion.category}`,
+        []
+      );
+    }
+
+    console.log(`📁 Document categorized as: ${finalCategory} (confidence: ${categorySuggestion.confidence.toFixed(2)})`);
+
     // Extract entities (quick + LLM)
     const quickEntities = NerService.extractQuick(processedDocument.content);
     const llmEntities = await NerService.extractLLM(processedDocument.content, processedDocument.originalName);
@@ -98,10 +120,14 @@ fileUploadRouter.post('/', async (req, res) => {
       topics,
       classification,
       entities,
+      category: finalCategory, // Smart KB category
       metadata: processedDocument.metadata,
       chunkCount: processedDocument.chunks.length,
       fileSize: req.file.size // Add file size from multer
     });
+
+    // Update category document counts
+    await CategoryService.updateCategoryCounts();
 
     // Clean up the uploaded file
     await FileProcessor.cleanupFile(filePath);
@@ -135,7 +161,13 @@ fileUploadRouter.post('/', async (req, res) => {
         wordCount: documentRecord.wordCount,
         chunkCount: documentRecord.chunkCount,
         summary: documentRecord.summary,
-        topics: documentRecord.topics
+        topics: documentRecord.topics,
+        category: {
+          name: finalCategory,
+          confidence: categorySuggestion.confidence,
+          isNew: categorySuggestion.isNew,
+          suggested: categorySuggestion.category // What AI suggested (in case user overrode)
+        }
       }
     });
 

@@ -5,6 +5,7 @@ import { ChatMessage } from './types';
 import { SourcesAccordion } from './SourcesAccordion';
 import { formatTime } from './utils';
 import { IconButton, Tooltip, Badge } from '../ui';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -113,10 +114,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           
           {message.isStreaming ? (
             <StreamingText text={message.content} isStreaming={true} />
-          ) : (
+          ) : isUser ? (
             <div className="whitespace-pre-wrap text-sm leading-relaxed">
               {message.content}
             </div>
+          ) : (
+            <MarkdownRenderer content={message.content} />
           )}
         </div>
 
