@@ -93,7 +93,7 @@ export const EmbeddingCache = {
     try {
       const redis = await getRedisService();
       if (redis?.isAvailable()) {
-        redis.setEmbedding(text, embedding).catch((err) => {
+        redis.setEmbedding(text, embedding).catch((err: any) => {
           logger.debug('Redis setEmbedding failed:', err);
         });
       }
