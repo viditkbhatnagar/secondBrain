@@ -159,6 +159,18 @@ export class DatabaseService {
   }
 
   /**
+   * Get total document count (for progress displays)
+   */
+  static async getTotalDocumentCount(): Promise<number> {
+    try {
+      return await DocumentModel.countDocuments().exec();
+    } catch (error) {
+      console.error('Failed to get total document count:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Get all documents (without content for performance)
    */
   static async getAllDocuments(): Promise<Omit<DocumentRecord, 'content'>[]> {

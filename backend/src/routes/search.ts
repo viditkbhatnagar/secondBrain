@@ -665,6 +665,7 @@ searchRouter.post('/documents', async (req, res) => {
  */
 searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request, res: Response) => {
   try {
+    const overallStartTime = Date.now();
     const query = String(req.query.query || '');
     const strategy = (req.query.strategy as string) === 'vector' ? 'vector' : 'hybrid';
     const rerank = req.query.rerank !== 'false';
@@ -687,11 +688,17 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
+    // Track timing for each stage
+    const timings: Record<string, number> = {};
+
     // Step 1: optionally create thread
+    let stageStart = Date.now();
     let tid = threadId || (await DatabaseService.createThread(strategy as any, rerank)).threadId;
+    timings.threadCreation = Date.now() - stageStart;
     send('thread', { threadId: tid });
 
     // Step 1.5: Fetch conversation history for context
+    stageStart = Date.now();
     let conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
     if (threadId) {
       try {
@@ -704,12 +711,16 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
         console.warn('Failed to fetch conversation history:', e);
       }
     }
+    timings.historyFetch = Date.now() - stageStart;
 
     // Step 2: log user message
+    stageStart = Date.now();
     await DatabaseService.addMessage(tid, 'user', query);
+    timings.messageLog = Date.now() - stageStart;
     send('step', { label: 'User message stored' });
 
     // Step 3: Resolve follow-up references if this is a continuation
+    stageStart = Date.now();
     let effectiveQuery = query;
     let searchQueries = [query];
     let isFollowUp = false;
@@ -724,13 +735,16 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
         send('step', { label: 'Query resolved', detail: { original: query, resolved: effectiveQuery } });
       }
     }
+    timings.queryResolution = Date.now() - stageStart;
 
     // Step 4: clarify (skip if query was resolved)
+    stageStart = Date.now();
     let clarifying: string | null = null;
     if (!isFollowUp) {
       clarifying = await AgentService.maybeClarify(effectiveQuery);
       if (clarifying) send('clarify', { question: clarifying });
     }
+    timings.clarification = Date.now() - stageStart;
 
     // Step 5: retrieve - search with all queries and combine results
     const searchQuery = clarifying ? `${effectiveQuery}\nClarification: ${clarifying}` : effectiveQuery;
@@ -738,28 +752,68 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     let trace: any[] = [];
 
     // Search with primary query - use smart retrieval if enabled
+    stageStart = Date.now();
     if (smart) {
+      // Send classification progress
+      send('step', { 
+        label: 'Analyzing query', 
+        detail: { stage: 'classification' } 
+      });
+
       // Smart category-based retrieval (faster for large KBs)
       const smartResult = await AgentService.retrieveSmart(searchQuery, { strategy: strategy as any, rerank });
       allChunks = [...smartResult.chunks];
       trace = [...smartResult.trace];
+      timings.retrieval = Date.now() - stageStart;
 
-      // Add category info to response
+      // Get total document count for context
+      const totalDocs = await DatabaseService.getTotalDocumentCount();
+
+      // Send detailed smart search progress
       if (smartResult.classification.categories.length > 0) {
         send('step', {
           label: 'Smart search',
           detail: {
+            type: 'smart_search',
             categories: smartResult.classification.categories,
             searchedDocuments: smartResult.searchedDocuments,
-            confidence: smartResult.classification.confidence
+            totalDocuments: totalDocs,
+            confidence: smartResult.classification.confidence,
+            reasoning: smartResult.classification.reasoning,
+            chunksFound: smartResult.chunks.length,
+            timing: timings.retrieval
+          }
+        });
+      } else {
+        // No category match - searching all documents
+        send('step', {
+          label: 'Searching all documents',
+          detail: {
+            type: 'full_search',
+            searchedDocuments: totalDocs,
+            totalDocuments: totalDocs,
+            chunksFound: smartResult.chunks.length,
+            timing: timings.retrieval,
+            reason: 'No category match found'
           }
         });
       }
     } else {
       // Standard retrieval (searches all documents)
+      const totalDocs = await DatabaseService.getTotalDocumentCount();
+      send('step', { 
+        label: `Searching all ${totalDocs} documents`, 
+        detail: { 
+          type: 'full_search',
+          searchedDocuments: totalDocs,
+          totalDocuments: totalDocs
+        } 
+      });
+      
       const primaryResult = await AgentService.retrieve(searchQuery, strategy as any, rerank);
       allChunks = [...primaryResult.chunks];
       trace = [...primaryResult.trace];
+      timings.retrieval = Date.now() - stageStart;
     }
     
     // If follow-up, also search with original query to get more context
@@ -783,7 +837,18 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       allChunks = allChunks.slice(0, 6);
     }
     
-    send('retrieval', { strategy, rerank, count: allChunks.length });
+    // Send detailed retrieval results
+    send('retrieval', { 
+      strategy, 
+      rerank, 
+      count: allChunks.length,
+      detail: {
+        foundChunks: allChunks.length,
+        uniqueDocuments: new Set(allChunks.map(c => c.documentId)).size,
+        topSimilarity: allChunks.length > 0 ? Math.round(allChunks[0].similarity * 100) : 0,
+        timing: timings.retrieval
+      }
+    });
 
     // Step 6: answer with conversation history (simulate token streaming by chunking the answer)
     // If no chunks found, use OpenAI for general knowledge streaming
@@ -914,6 +979,7 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     }
     
     // Use answer from documents
+    stageStart = Date.now();
     const answer = result.answer || '';
     const tokenSize = 80;
     for (let i = 0; i < answer.length; i += tokenSize) {
@@ -921,10 +987,13 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       send('answer', { partial: slice });
       await new Promise(r => setTimeout(r, 20));
     }
+    timings.answerGeneration = Date.now() - stageStart;
 
     // Step 7: finalize and persist
+    stageStart = Date.now();
     await DatabaseService.logSearchQuery(query, allChunks.length, result.confidence, 0);
     await DatabaseService.addMessage(tid, 'assistant', result.answer, { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: false } }, trace);
+    timings.persistence = Date.now() - stageStart;
     
     // Track chat message analytics with token usage
     const sessionId = req.headers['x-session-id'] as string || req.ip || 'anonymous';
@@ -948,7 +1017,20 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       });
     }
     
-    send('done', { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: false, confidence: result.confidence }, agentTrace: trace });
+    // Calculate total time
+    timings.total = Date.now() - overallStartTime;
+    
+    send('done', { 
+      metadata: { 
+        strategy, 
+        rerank, 
+        isFollowUp, 
+        isGeneralKnowledge: false, 
+        confidence: result.confidence,
+        timings 
+      }, 
+      agentTrace: trace 
+    });
     res.end();
   } catch (error) {
     logger.error('Agent stream error:', { error: (error as any).message, requestId: req.requestId });

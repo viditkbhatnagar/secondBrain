@@ -28,7 +28,12 @@ export const ChatPage: React.FC = () => {
     enabled: boolean;
     categories: string[];
     searchedDocs: number;
-  }>({ enabled: false, categories: [], searchedDocs: 0 });
+    totalDocs: number;
+    chunksFound: number;
+    reasoning?: string;
+    confidence?: number;
+    timings?: number;
+  }>({ enabled: false, categories: [], searchedDocs: 0, totalDocs: 0, chunksFound: 0 });
 
   // Refs
   const endRef = useRef<HTMLDivElement>(null);
@@ -124,13 +129,19 @@ export const ChatPage: React.FC = () => {
 
   const startStream = async (prompt: string, mode: ResponseMode, threadId?: string) => {
     setThinkingStage('understanding');
-    setSmartSearchInfo({ enabled: false, categories: [], searchedDocs: 0 }); // Reset smart search info
+    setSmartSearchInfo({ 
+      enabled: false, 
+      categories: [], 
+      searchedDocs: 0, 
+      totalDocs: 0, 
+      chunksFound: 0 
+    }); // Reset smart search info
     let sources: SourceInfo[] = [];
     let confidence = 75;
     const isFirstMessage = !threadId;
 
-    // Progress through thinking stages
-    setTimeout(() => setThinkingStage('searching'), 800);
+    // Don't auto-progress - let SSE events control the stage
+    // The backend will send 'step' events to update progress
 
     try {
       // Use the agent stream endpoint that properly persists messages
@@ -192,14 +203,45 @@ export const ChatPage: React.FC = () => {
 
             case 'step':
               // Update thinking stages based on step
-              if (data.label?.includes('Smart search')) {
-                // Smart search detected - update info
-                setSmartSearchInfo({
+              if (data.label?.includes('Smart search') || data.detail?.type === 'smart_search') {
+                // Smart search detected - update info with all details
+                const detail = data.detail || {};
+                const smartInfo = {
                   enabled: true,
-                  categories: data.detail?.categories || [],
-                  searchedDocs: data.detail?.searchedDocuments || 0,
-                });
+                  categories: detail.categories || [],
+                  searchedDocs: detail.searchedDocuments || 0,
+                  totalDocs: detail.totalDocuments || documentCount,
+                  chunksFound: detail.chunksFound || 0,
+                  reasoning: detail.reasoning,
+                  confidence: detail.confidence,
+                  timings: detail.timing,
+                };
+                console.log('🎯 Smart search info:', smartInfo);
+                // Update state immediately - force stage even if null
+                setSmartSearchInfo(smartInfo);
                 setThinkingStage('searching');
+                console.log('✅ Stage set to: searching');
+                // Wait to ensure this stage is visible before next event
+                await new Promise(resolve => setTimeout(resolve, 400));
+              } else if (data.detail?.type === 'full_search') {
+                // Full search (no category filtering)
+                const detail = data.detail || {};
+                const fullSearchInfo = {
+                  enabled: false,
+                  categories: [],
+                  searchedDocs: detail.searchedDocuments || documentCount,
+                  totalDocs: detail.totalDocuments || documentCount,
+                  chunksFound: detail.chunksFound || 0,
+                  timings: detail.timing,
+                };
+                console.log('🔍 Full search (no category match):', fullSearchInfo);
+                setSmartSearchInfo(fullSearchInfo);
+                setThinkingStage('searching');
+                console.log('✅ Stage set to: searching');
+                // Wait to ensure this stage is visible before next event
+                await new Promise(resolve => setTimeout(resolve, 400));
+              } else if (data.label?.includes('Analyzing query')) {
+                setThinkingStage('understanding');
               } else if (data.label?.includes('Searching') || data.label?.includes('stored')) {
                 setThinkingStage('searching');
               } else if (data.label?.includes('found')) {
@@ -211,14 +253,35 @@ export const ChatPage: React.FC = () => {
               break;
 
             case 'retrieval':
-              // Retrieval step - switch to found stage
-              setThinkingStage('found');
-              setFoundCount(data.count || 0);
+              // Retrieval step - switch to found stage with detailed info
+              const retrievalDetail = data.detail || {};
+              setFoundCount(retrievalDetail.foundChunks || data.count || 0);
+              
+              // Update smart search info with final results
+              setSmartSearchInfo(prev => {
+                const updated = {
+                  ...prev,
+                  chunksFound: retrievalDetail.foundChunks || data.count || 0,
+                  timings: retrievalDetail.timing || prev.timings,
+                };
+                console.log('📦 Updated smartSearch with chunks found:', updated);
+                return updated;
+              });
+              
+              // Ensure we're in 'searching' stage to show the found chunks
+              setThinkingStage('searching');
+              
+              // Stay on 'searching' and update the smartSearch info to show found chunks
+              // The text will update to show "Found X chunks" via smartSearch.chunksFound
+              // Wait 500ms before allowing next stage to ensure this is visible
+              await new Promise(resolve => setTimeout(resolve, 500));
               break;
 
             case 'answer':
               // Stream the answer (backend sends 'answer' event with 'partial' field)
-              setThinkingStage('composing');
+              // Wait a bit to ensure previous stage was visible, then hide thinking indicator
+              await new Promise(resolve => setTimeout(resolve, 300));
+              setThinkingStage(null);
               setMessages((prev) => {
                 const existing = prev.find((m) => m.isStreaming);
                 if (existing) {
@@ -260,9 +323,10 @@ export const ChatPage: React.FC = () => {
                   }
                 }
                 
-                // Get confidence and general knowledge flag from metadata
+                // Get confidence, general knowledge flag, and timings from metadata
                 const finalConfidence = data.metadata?.confidence || 75;
                 const isGeneralKnowledge = data.metadata?.isGeneralKnowledge || false;
+                const timings = data.metadata?.timings;
 
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -272,7 +336,8 @@ export const ChatPage: React.FC = () => {
                           isStreaming: false, 
                           sources: finalSources, 
                           confidence: finalConfidence,
-                          isGeneralKnowledge 
+                          isGeneralKnowledge,
+                          metadata: { ...m.metadata, timings }
                         }
                       : m
                   )
@@ -282,11 +347,18 @@ export const ChatPage: React.FC = () => {
                 // Reload threads to update sidebar with latest message
                 loadThreads();
 
-                console.log(`🚀 Chat completed`, {
-                  sources: finalSources.length,
-                  confidence: finalConfidence,
-                  isGeneralKnowledge,
-                });
+                // Log performance metrics
+                if (timings) {
+                  console.log(`🚀 Chat completed in ${(timings.total / 1000).toFixed(1)}s`, {
+                    sources: finalSources.length,
+                    confidence: finalConfidence,
+                    breakdown: {
+                      retrieval: `${(timings.retrieval / 1000).toFixed(1)}s`,
+                      answer: `${(timings.answerGeneration / 1000).toFixed(1)}s`,
+                      save: `${(timings.persistence / 1000).toFixed(2)}s`,
+                    },
+                  });
+                }
               })();
               break;
 
@@ -457,6 +529,7 @@ export const ChatPage: React.FC = () => {
 
               {thinkingStage && (
                 <ThinkingIndicator
+                  key={`${thinkingStage}-${smartSearchInfo.searchedDocs}`}
                   stage={thinkingStage}
                   documentCount={documentCount}
                   foundCount={foundCount}

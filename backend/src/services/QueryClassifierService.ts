@@ -17,6 +17,10 @@ export class QueryClassifierService {
   private static cacheExpiry: number = 0;
   private static CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+  // Cache for query classifications to avoid repeated LLM calls
+  private static classificationCache = new Map<string, { result: QueryClassification; timestamp: number }>();
+  private static CLASSIFICATION_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
   /**
    * Get categories with caching
    */
@@ -44,6 +48,16 @@ export class QueryClassifierService {
    * This is the main entry point - fast and efficient
    */
   static async classifyQuery(query: string): Promise<QueryClassification> {
+    const startTime = Date.now();
+
+    // Check classification cache first
+    const normalizedQuery = query.toLowerCase().trim();
+    const cached = this.classificationCache.get(normalizedQuery);
+    if (cached && (Date.now() - cached.timestamp) < this.CLASSIFICATION_CACHE_TTL) {
+      console.log(`⚡ Query classification cache hit (${Date.now() - startTime}ms)`);
+      return cached.result;
+    }
+
     const categories = await this.getCategories();
 
     // If no categories, search all
@@ -59,20 +73,26 @@ export class QueryClassifierService {
     // Step 1: Quick keyword matching (very fast, no API call)
     const keywordMatch = this.keywordMatch(query, categories);
     if (keywordMatch.confidence > 0.8) {
-      console.log(`🎯 Query classified via keywords: ${keywordMatch.categories.join(', ')}`);
+      const elapsed = Date.now() - startTime;
+      console.log(`🎯 Query classified via keywords: ${keywordMatch.categories.join(', ')} (${elapsed}ms)`);
+      this.classificationCache.set(normalizedQuery, { result: keywordMatch, timestamp: Date.now() });
       return keywordMatch;
     }
 
     // Step 2: Semantic matching using embeddings (fast, uses cached embeddings)
     const semanticMatch = await this.semanticMatch(query, categories);
     if (semanticMatch.confidence > 0.7) {
-      console.log(`🎯 Query classified via semantics: ${semanticMatch.categories.join(', ')}`);
+      const elapsed = Date.now() - startTime;
+      console.log(`🎯 Query classified via semantics: ${semanticMatch.categories.join(', ')} (${elapsed}ms)`);
+      this.classificationCache.set(normalizedQuery, { result: semanticMatch, timestamp: Date.now() });
       return semanticMatch;
     }
 
     // Step 3: LLM classification (slower but most accurate)
     const llmMatch = await this.llmClassify(query, categories);
-    console.log(`🎯 Query classified via LLM: ${llmMatch.categories.join(', ')}`);
+    const elapsed = Date.now() - startTime;
+    console.log(`🎯 Query classified via LLM: ${llmMatch.categories.join(', ')} (${elapsed}ms)`);
+    this.classificationCache.set(normalizedQuery, { result: llmMatch, timestamp: Date.now() });
     return llmMatch;
   }
 

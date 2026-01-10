@@ -1,7 +1,15 @@
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    timings?: {
+      retrieval?: number;
+      answerGeneration?: number;
+      persistence?: number;
+      total?: number;
+    };
+    [key: string]: unknown;
+  };
   sources?: SourceInfo[];
   confidence?: number;
   isStreaming?: boolean;
