@@ -38,11 +38,25 @@ class RedisService {
     const redisPassword = process.env.REDIS_PASSWORD;
     const redisEnabled = process.env.REDIS_ENABLED === 'true';
 
-    // Skip Redis if not configured or explicitly disabled
-    if (!redisEnabled && !redisUrl && redisHost === 'localhost') {
+    // Skip Redis if explicitly disabled OR no configuration provided
+    if (redisEnabled === false && process.env.REDIS_ENABLED !== undefined) {
+      logger.info('⚠️ Redis explicitly disabled - using in-memory cache fallback');
+      return;
+    }
+
+    // Skip if no Redis configuration provided at all
+    if (!redisUrl && redisHost === 'localhost' && !redisPassword) {
       logger.info('⚠️ Redis not configured - using in-memory cache fallback');
       return;
     }
+
+    // If we have a Redis URL or non-localhost config, try to connect
+    logger.info('🔄 Attempting to connect to Redis...', { 
+      hasUrl: !!redisUrl, 
+      host: redisHost, 
+      port: redisPort,
+      enabled: redisEnabled 
+    });
 
     try {
       const isProduction = process.env.NODE_ENV === 'production';
@@ -109,6 +123,7 @@ class RedisService {
 
       // Attempt connection
       await this.redis.connect();
+      logger.info('🔌 Redis connection attempt complete');
     } catch (error: any) {
       logger.warn('Redis connection failed, using fallback:', { error: error.message });
       this.redis = null;
@@ -120,7 +135,11 @@ class RedisService {
    * Check if Redis is available
    */
   isAvailable(): boolean {
-    return this.isConnected && this.redis !== null;
+    const available = this.isConnected && this.redis !== null;
+    if (!available && this.redis !== null) {
+      logger.debug('Redis check: connected=false, redis exists=true');
+    }
+    return available;
   }
 
   /**
@@ -309,7 +328,11 @@ class RedisService {
    */
   async getEmbedding(text: string): Promise<number[] | null> {
     const key = `${CACHE_PREFIX.EMBEDDING}${this.hash(text)}`;
-    return this.get<number[]>(key);
+    const result = await this.get<number[]>(key);
+    if (result) {
+      logger.info('🎯 Redis embedding cache HIT', { hash: this.hash(text).substring(0, 8) });
+    }
+    return result;
   }
 
   /**
@@ -317,7 +340,11 @@ class RedisService {
    */
   async setEmbedding(text: string, embedding: number[]): Promise<boolean> {
     const key = `${CACHE_PREFIX.EMBEDDING}${this.hash(text)}`;
-    return this.set(key, embedding, CACHE_TTL.EMBEDDING);
+    const success = await this.set(key, embedding, CACHE_TTL.EMBEDDING);
+    if (success) {
+      logger.info('💾 Redis embedding cached', { hash: this.hash(text).substring(0, 8) });
+    }
+    return success;
   }
 
   /**
@@ -325,7 +352,11 @@ class RedisService {
    */
   async getSearchResults(query: string, strategy: string): Promise<any | null> {
     const key = `${CACHE_PREFIX.SEARCH}${this.hash(`${query}:${strategy}`)}`;
-    return this.get(key);
+    const result = await this.get(key);
+    if (result) {
+      logger.info('🎯 Redis search cache HIT', { query: query.substring(0, 30) });
+    }
+    return result;
   }
 
   /**
@@ -333,7 +364,11 @@ class RedisService {
    */
   async setSearchResults(query: string, strategy: string, results: any): Promise<boolean> {
     const key = `${CACHE_PREFIX.SEARCH}${this.hash(`${query}:${strategy}`)}`;
-    return this.set(key, results, CACHE_TTL.SEARCH);
+    const success = await this.set(key, results, CACHE_TTL.SEARCH);
+    if (success) {
+      logger.info('💾 Redis search results cached', { query: query.substring(0, 30), count: results?.length || 0 });
+    }
+    return success;
   }
 
   /**

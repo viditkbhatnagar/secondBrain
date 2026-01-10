@@ -66,12 +66,18 @@ export const EmbeddingCache = {
         if (redisCached) {
           // Populate LRU cache
           embeddingCache.set(hash, redisCached);
-          logger.debug('Embedding Redis cache hit', { hash: hash.substring(0, 8) });
+          logger.debug('Embedding Redis cache hit (propagated to LRU)', { hash: hash.substring(0, 8) });
           return redisCached;
+        }
+      } else {
+        // Log once every 100 checks to avoid spam
+        if (Math.random() < 0.01) {
+          logger.debug('Redis not available for embedding cache');
         }
       }
     } catch (e) {
       // Redis unavailable, continue without
+      logger.debug('Redis error in embedding get:', e);
     }
     
     return undefined;
@@ -87,10 +93,13 @@ export const EmbeddingCache = {
     try {
       const redis = await getRedisService();
       if (redis?.isAvailable()) {
-        redis.setEmbedding(text, embedding).catch(() => {});
+        redis.setEmbedding(text, embedding).catch((err) => {
+          logger.debug('Redis setEmbedding failed:', err);
+        });
       }
     } catch (e) {
       // Redis unavailable, LRU is sufficient
+      logger.debug('Redis not available for embedding set');
     }
     
     logger.debug('Embedding cached', { hash: hash.substring(0, 8) });
