@@ -758,7 +758,8 @@ class AnalyticsService {
       explain: { tokens: 0, cost: 0, count: 0 },
       flashcards: { tokens: 0, cost: 0, count: 0 },
       quiz: { tokens: 0, cost: 0, count: 0 },
-      audio: { tokens: 0, cost: 0, count: 0 }
+      audio: { tokens: 0, cost: 0, count: 0 },
+      voice_agent: { tokens: 0, cost: 0, count: 0 }
     };
 
     trainingByFeature.forEach((item: any) => {

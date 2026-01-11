@@ -27,7 +27,7 @@ export interface IAnalyticsEvent extends Document {
     completionTokens?: number;
     estimatedCost?: number;
     aiSource?: 'chat' | 'training';  // Distinguish between chat and training AI calls
-    aiFeature?: 'explain' | 'flashcards' | 'quiz' | 'audio';  // Specific training feature
+    aiFeature?: 'explain' | 'flashcards' | 'quiz' | 'audio' | 'voice_agent';  // Specific training feature
     confidence?: number;
     errorType?: string;
     errorMessage?: string;

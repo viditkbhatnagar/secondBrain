@@ -19,6 +19,7 @@
         "seed:admin": "ts-node src/scripts/seedAdmin.ts"
     },
     "dependencies": {
+        "@types/ws": "^8.18.1",
         "@xenova/transformers": "^2.15.0",
         "bcryptjs": "^3.0.3",
         "compression": "^1.8.1",
@@ -46,6 +47,7 @@
         "uuid": "^10.0.0",
         "winston": "^3.19.0",
         "winston-daily-rotate-file": "^5.0.0",
+        "ws": "^8.19.0",
         "xss": "^1.0.15",
         "zod": "^3.22.0"
     },

@@ -895,7 +895,7 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     // Step 6: answer with conversation history (simulate token streaming by chunking the answer)
     // If no chunks found, use OpenAI for general knowledge streaming
     let isGeneralKnowledge = false;
-    const CONFIDENCE_THRESHOLD = 30; // Confidence threshold for fallback to OpenAI
+    const CONFIDENCE_THRESHOLD = 50; // Confidence threshold for fallback to OpenAI (raised for better UX)
     
     if (allChunks.length === 0 && OpenAIService.isConfigured()) {
       // Stream from OpenAI for general knowledge
@@ -928,15 +928,17 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
           tokensUsed
         });
         
-        // Track ai_response for token aggregation
+        // Track ai_response for token aggregation with aiSource
         if (tokensUsed > 0) {
           await analyticsService.trackEvent('ai_response', sessionId, {
+            aiSource: 'chat',
             tokensUsed,
             query: query.substring(0, 200),
-            confidence: 70
+            confidence: 70,
+            isGeneralKnowledge: true
           });
         }
-        
+
         send('done', { metadata: { strategy, rerank, isFollowUp, isGeneralKnowledge: true, confidence: 70 }, agentTrace: trace });
         res.end();
         return;
@@ -948,12 +950,41 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     
     // Generate answer from documents with the selected mode
     const result = await AgentService.answer(effectiveQuery, allChunks, conversationHistory, mode);
-    
-    // Check if confidence is too low - fallback to OpenAI
-    if (result.confidence < CONFIDENCE_THRESHOLD && OpenAIService.isConfigured()) {
-      logger.info(`Low confidence (${result.confidence}%) - Falling back to OpenAI general knowledge`);
+
+    // Patterns that indicate the KB doesn't have the answer
+    const noInfoPatterns = [
+      /sources do not contain/i,
+      /provided sources do not contain/i,
+      /i('m| am) afraid i don't have/i,
+      /i couldn't find (any |specific )?information/i,
+      /i don't have (any |specific )?information/i,
+      /the documents (provided |)don't contain/i,
+      /without any relevant information/i,
+      /no (relevant |specific )?information (about|on|regarding|found)/i,
+      /not (find|contain|have) (any )?(details|information|data) about/i,
+      /couldn't provide a detailed answer/i,
+      /i cannot find/i,
+      /there is no information/i,
+      /no information (is )?available/i,
+      /unable to find/i,
+      /does not (contain|include|have)/i,
+      /couldn't locate/i,
+      /not covered in/i,
+      /outside (the |my )?knowledge/i,
+      /beyond (the |my )?scope/i,
+      /please provide more details/i
+    ];
+
+    const answerIndicatesNoInfo = noInfoPatterns.some(pattern => pattern.test(result.answer));
+
+    // Check if confidence is too low OR answer indicates no info - fallback to OpenAI
+    if ((result.confidence < CONFIDENCE_THRESHOLD || answerIndicatesNoInfo) && OpenAIService.isConfigured()) {
+      const fallbackReason = answerIndicatesNoInfo
+        ? 'Answer indicates information not in KB'
+        : `Low confidence (${result.confidence}%)`;
+      logger.info(`${fallbackReason} - Falling back to OpenAI general knowledge`);
       isGeneralKnowledge = true;
-      send('step', { label: `Low confidence (${result.confidence}%) - Using general knowledge instead` });
+      send('step', { label: `${fallbackReason} - Using general knowledge` });
       
       try {
         // Stream answer from OpenAI
@@ -992,25 +1023,27 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
           tokensUsed
         });
         
-        // Track ai_response for token aggregation
+        // Track ai_response for token aggregation with aiSource
         if (tokensUsed > 0) {
           await analyticsService.trackEvent('ai_response', sessionId, {
+            aiSource: 'chat',
             tokensUsed,
             query: query.substring(0, 200),
-            confidence: 70
+            confidence: 70,
+            isGeneralKnowledge: true
           });
         }
-        
-        send('done', { 
-          metadata: { 
-            strategy, 
-            rerank, 
-            isFollowUp, 
-            isGeneralKnowledge: true, 
+
+        send('done', {
+          metadata: {
+            strategy,
+            rerank,
+            isFollowUp,
+            isGeneralKnowledge: true,
             confidence: 70,
-            originalConfidence: result.confidence 
-          }, 
-          agentTrace: trace 
+            originalConfidence: result.confidence
+          },
+          agentTrace: trace
         });
         res.end();
         return;
@@ -1061,9 +1094,10 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
       tokensUsed
     });
     
-    // Also track ai_response for token aggregation
+    // Also track ai_response for token aggregation with aiSource
     if (tokensUsed > 0) {
       await analyticsService.trackEvent('ai_response', sessionId, {
+        aiSource: 'chat',
         tokensUsed,
         query: query.substring(0, 200),
         confidence: result.confidence

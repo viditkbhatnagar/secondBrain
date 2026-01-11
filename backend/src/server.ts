@@ -13,6 +13,8 @@ if (result.error) {
 }
 
 import express from 'express';
+import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import compression from 'compression';
 import multer from 'multer';
@@ -35,6 +37,7 @@ import { DatabaseService } from './services/DatabaseService';
 import { VectorService } from './services/VectorService';
 import { GptService } from './services/GptService';
 import { TrainingService } from './services/TrainingService';
+import { VoiceAgentService } from './services/VoiceAgentService';
 import { redisService } from './services/RedisService';
 import { cacheWarmer } from './services/cacheWarmer';
 import { swaggerSpec } from './config/swagger';
@@ -306,7 +309,78 @@ async function startServer() {
     await VectorService.initialize();
     logger.info('✅ Vector service initialized');
 
-    app.listen(PORT, () => {
+    // Create HTTP server
+    const server = http.createServer(app);
+
+    // Set up WebSocket server for voice agent
+    const wss = new WebSocketServer({ server, path: '/ws/voice' });
+
+    wss.on('connection', (ws: WebSocket, req) => {
+      const url = new URL(req.url || '', `http://${req.headers.host}`);
+      const sessionId = url.searchParams.get('sessionId') || `voice-${Date.now()}`;
+      const documentId = url.searchParams.get('documentId');
+      const pageNumber = parseInt(url.searchParams.get('pageNumber') || '1');
+
+      logger.info(`Voice WebSocket connection: session=${sessionId}, doc=${documentId}, page=${pageNumber}`);
+
+      if (!documentId) {
+        ws.send(JSON.stringify({ type: 'error', message: 'documentId is required' }));
+        ws.close();
+        return;
+      }
+
+      // Initialize voice session
+      VoiceAgentService.createSession(sessionId, ws, documentId, pageNumber);
+
+      ws.on('message', (data: Buffer) => {
+        try {
+          const message = JSON.parse(data.toString());
+
+          switch (message.type) {
+            case 'audio':
+              // Forward audio data to OpenAI
+              VoiceAgentService.sendAudioToOpenAI(sessionId, message.audio);
+              break;
+
+            case 'audio.commit':
+              // Commit audio buffer to get response
+              VoiceAgentService.commitAudio(sessionId);
+              break;
+
+            case 'text':
+              // Send text message (for accessibility or testing)
+              VoiceAgentService.sendTextMessage(sessionId, message.text);
+              break;
+
+            case 'interrupt':
+              // Cancel current response
+              VoiceAgentService.interruptResponse(sessionId);
+              break;
+
+            case 'close':
+              VoiceAgentService.closeSession(sessionId);
+              ws.close();
+              break;
+
+            default:
+              logger.warn(`Unknown voice message type: ${message.type}`);
+          }
+        } catch (error) {
+          logger.error('Failed to parse voice WebSocket message:', error);
+        }
+      });
+
+      ws.on('close', () => {
+        logger.info(`Voice WebSocket closed: session=${sessionId}`);
+        VoiceAgentService.handleClientDisconnect(sessionId);
+      });
+
+      ws.on('error', (error) => {
+        logger.error(`Voice WebSocket error: session=${sessionId}`, error);
+      });
+    });
+
+    server.listen(PORT, () => {
       logger.info(`🌟 Server running on port ${PORT}`);
       logger.info(`📋 Health check: http://localhost:${PORT}/api/health`);
       logger.info(`📋 Detailed health: http://localhost:${PORT}/api/health/detailed`);
@@ -316,16 +390,17 @@ async function startServer() {
       logger.info('   🚀 Ultimate Search: POST /api/search/ultimate');
       logger.info('   📁 Documents: GET /api/documents');
       logger.info('   📊 Stats: GET /api/documents/stats');
+      logger.info('   🎙️ Voice Agent: ws://localhost:' + PORT + '/ws/voice');
       logger.info('🎉 Personal Knowledge Base is ready!');
 
       // Start cache warmup in background (after server is ready)
       setTimeout(() => {
         logger.info('🔥 Starting background cache warmup...');
         cacheWarmer.warmup().catch(err => logger.error('Cache warmup failed:', err));
-        
+
         // Schedule periodic cache refresh (every hour)
         cacheWarmer.scheduleRefresh(3600000);
-        
+
         // Start keep-alive for Render (prevents sleeping)
         keepAlive.start();
       }, 5000);

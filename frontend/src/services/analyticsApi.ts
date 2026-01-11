@@ -97,6 +97,7 @@ export interface CostStats {
       flashcards: { tokens: number; cost: number; count: number };
       quiz: { tokens: number; cost: number; count: number };
       audio: { tokens: number; cost: number; count: number };
+      voice_agent: { tokens: number; cost: number; count: number };
     };
   };
   total: {

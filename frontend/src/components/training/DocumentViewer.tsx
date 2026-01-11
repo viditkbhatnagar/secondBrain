@@ -16,7 +16,8 @@ import {
   Minimize2,
   X,
   Play,
-  Pause
+  Pause,
+  Radio
 } from 'lucide-react';
 import {
   TrainingDocument,
@@ -30,6 +31,7 @@ import {
 import { getDocumentFileUrl } from '../../services/trainingService';
 import FlashcardModal from './FlashcardModal';
 import QuizModal from './QuizModal';
+import VoiceAgent from './VoiceAgent';
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -62,6 +64,7 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
   const [showFlashcardModal, setShowFlashcardModal] = useState(false);
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [showExplanationPanel, setShowExplanationPanel] = useState(false);
+  const [showVoiceAgent, setShowVoiceAgent] = useState(false);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -256,6 +259,15 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
             {loadingAudio ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Volume2 className="h-3.5 w-3.5" />}
             Audio
           </button>
+
+          <button
+            onClick={() => setShowVoiceAgent(true)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-gradient-to-r from-indigo-500 to-purple-500 text-white hover:from-indigo-600 hover:to-purple-600 text-xs font-medium shadow-sm"
+            title="Interactive voice chat about this page"
+          >
+            <Radio className="h-3.5 w-3.5" />
+            Voice Chat
+          </button>
         </div>
       </div>
 
@@ -387,6 +399,16 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
         <QuizModal
           quiz={quiz}
           onClose={() => setShowQuizModal(false)}
+        />
+      )}
+
+      {/* Voice Agent Modal */}
+      {showVoiceAgent && (
+        <VoiceAgent
+          documentId={document.id}
+          pageNumber={currentPage}
+          documentName={document.originalName}
+          onClose={() => setShowVoiceAgent(false)}
         />
       )}
     </div>
