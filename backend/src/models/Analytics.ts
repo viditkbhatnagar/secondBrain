@@ -23,6 +23,11 @@ export interface IAnalyticsEvent extends Document {
     documentName?: string;
     responseTime?: number;
     tokensUsed?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    estimatedCost?: number;
+    aiSource?: 'chat' | 'training';  // Distinguish between chat and training AI calls
+    aiFeature?: 'explain' | 'flashcards' | 'quiz' | 'audio';  // Specific training feature
     confidence?: number;
     errorType?: string;
     errorMessage?: string;
@@ -65,6 +70,11 @@ const AnalyticsEventSchema = new Schema<IAnalyticsEvent>({
     documentName: String,
     responseTime: Number,
     tokensUsed: Number,
+    promptTokens: Number,
+    completionTokens: Number,
+    estimatedCost: Number,
+    aiSource: { type: String, enum: ['chat', 'training'] },
+    aiFeature: { type: String, enum: ['explain', 'flashcards', 'quiz', 'audio'] },
     confidence: Number,
     errorType: String,
     errorMessage: String,

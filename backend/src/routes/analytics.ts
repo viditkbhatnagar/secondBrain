@@ -191,6 +191,32 @@ router.get('/realtime',
 
 /**
  * @swagger
+ * /api/analytics/costs:
+ *   get:
+ *     summary: Get bifurcated cost statistics (chat vs training)
+ *     tags: [Analytics]
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 30
+ *         description: Number of days to analyze
+ *     responses:
+ *       200:
+ *         description: Cost statistics broken down by source
+ */
+router.get('/costs',
+  validateQuery(timeRangeSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const days = parseInt(req.query.days as string) || 30;
+    const data = await analyticsService.getCostStats(days);
+    res.json(data);
+  })
+);
+
+/**
+ * @swagger
  * /api/analytics/track:
  *   post:
  *     summary: Track an analytics event

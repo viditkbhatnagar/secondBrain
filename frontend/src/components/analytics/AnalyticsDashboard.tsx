@@ -22,7 +22,8 @@ import { ResponseTimeChart } from './charts/ResponseTimeChart';
 import { FileTypesChart } from './charts/FileTypesChart';
 import { ActivityHeatmap } from './charts/ActivityHeatmap';
 import { ConfidenceChart } from './charts/ConfidenceChart';
-import { analyticsApi, OverviewStats } from '../../services/analyticsApi';
+import { analyticsApi, OverviewStats, CostStats } from '../../services/analyticsApi';
+import { GraduationCap } from 'lucide-react';
 
 const timeRanges = [
   { label: '7 days', value: 7 },
@@ -33,24 +34,10 @@ const timeRanges = [
 // Auto-refresh interval in milliseconds (30 seconds)
 const AUTO_REFRESH_INTERVAL = 30000;
 
-// GPT-5 Pricing (per 1M tokens)
-const GPT5_INPUT_COST = 1.25;   // $1.25 per 1M input tokens
-const GPT5_OUTPUT_COST = 10.00;  // $10.00 per 1M output tokens
-
-// Calculate API cost from tokens (assuming 70% input, 30% output mix)
-const calculateApiCost = (totalTokens: number): number => {
-  const inputTokens = totalTokens * 0.7;
-  const outputTokens = totalTokens * 0.3;
-  
-  const inputCost = (inputTokens / 1000000) * GPT5_INPUT_COST;
-  const outputCost = (outputTokens / 1000000) * GPT5_OUTPUT_COST;
-  
-  return inputCost + outputCost;
-};
-
 export function AnalyticsDashboard(): JSX.Element {
   const [days, setDays] = useState(30);
   const [overview, setOverview] = useState<OverviewStats | null>(null);
+  const [costStats, setCostStats] = useState<CostStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -59,11 +46,15 @@ export function AnalyticsDashboard(): JSX.Element {
   const fetchOverview = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
     try {
-      const data = await analyticsApi.getOverview(days);
-      setOverview(data);
+      const [overviewData, costsData] = await Promise.all([
+        analyticsApi.getOverview(days),
+        analyticsApi.getCosts(days)
+      ]);
+      setOverview(overviewData);
+      setCostStats(costsData);
       setLastUpdated(new Date());
     } catch (error) {
-      console.error('Failed to fetch overview:', error);
+      console.error('Failed to fetch analytics:', error);
     } finally {
       if (showLoading) setIsLoading(false);
     }
@@ -179,18 +170,47 @@ export function AnalyticsDashboard(): JSX.Element {
           color="success"
         />
         <StatsCard
-          title="API Cost"
-          value={calculateApiCost(overview?.totalTokensUsed ?? 0)}
-          icon={DollarSign}
-          prefix="$"
-          decimals={2}
-          color="warning"
-        />
-        <StatsCard
           title="Total Documents"
           value={overview?.totalDocuments ?? 0}
           icon={FileText}
           color="info"
+        />
+        <StatsCard
+          title="Unique Sessions"
+          value={overview?.uniqueSessions ?? 0}
+          icon={Users}
+          color="secondary"
+        />
+      </div>
+
+      {/* Cost Breakdown Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatsCard
+          title="Chat Cost"
+          value={costStats?.chat.estimatedCost ?? 0}
+          icon={MessageSquare}
+          prefix="$"
+          decimals={4}
+          color="primary"
+          description={`${(costStats?.chat.totalTokens ?? 0).toLocaleString()} tokens`}
+        />
+        <StatsCard
+          title="Training Cost"
+          value={costStats?.training.estimatedCost ?? 0}
+          icon={GraduationCap}
+          prefix="$"
+          decimals={4}
+          color="success"
+          description={`${(costStats?.training.totalTokens ?? 0).toLocaleString()} tokens`}
+        />
+        <StatsCard
+          title="Total API Cost"
+          value={costStats?.total.estimatedCost ?? 0}
+          icon={DollarSign}
+          prefix="$"
+          decimals={4}
+          color="warning"
+          description={`${(costStats?.total.totalTokens ?? 0).toLocaleString()} tokens`}
         />
       </div>
 
@@ -213,17 +233,17 @@ export function AnalyticsDashboard(): JSX.Element {
           size="sm"
         />
         <StatsCard
-          title="Tokens Used"
-          value={overview?.totalTokensUsed ?? 0}
-          icon={Zap}
-          color="warning"
+          title="Chat Requests"
+          value={costStats?.chat.requestCount ?? 0}
+          icon={MessageSquare}
+          color="primary"
           size="sm"
         />
         <StatsCard
-          title="Unique Sessions"
-          value={overview?.uniqueSessions ?? 0}
-          icon={Users}
-          color="info"
+          title="Training Requests"
+          value={costStats?.training.requestCount ?? 0}
+          icon={GraduationCap}
+          color="success"
           size="sm"
         />
       </div>

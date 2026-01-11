@@ -6,9 +6,12 @@ import {
   FileText,
   ChevronRight,
   ChevronDown,
+  ChevronLeft,
   BookOpen,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import {
   getOrganizations,
@@ -31,6 +34,7 @@ export function TrainingPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadingOrgs, setLoadingOrgs] = useState<Set<string>>(new Set());
   const [loadingCourses, setLoadingCourses] = useState<Set<string>>(new Set());
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Load organizations on mount
   useEffect(() => {
@@ -56,7 +60,6 @@ export function TrainingPage() {
       newExpanded.delete(orgId);
     } else {
       newExpanded.add(orgId);
-      // Load courses if not already loaded
       if (!coursesByOrg[orgId]) {
         try {
           setLoadingOrgs(prev => new Set(prev).add(orgId));
@@ -82,7 +85,6 @@ export function TrainingPage() {
       newExpanded.delete(courseId);
     } else {
       newExpanded.add(courseId);
-      // Load documents if not already loaded
       if (!documentsByCourse[courseId]) {
         try {
           setLoadingCourses(prev => new Set(prev).add(courseId));
@@ -108,7 +110,7 @@ export function TrainingPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
+      <div className="flex items-center justify-center h-[calc(100vh-140px)]">
         <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
       </div>
     );
@@ -116,7 +118,7 @@ export function TrainingPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 text-center">
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-140px)] text-center">
         <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
         <p className="text-red-600 dark:text-red-400">{error}</p>
         <button
@@ -130,143 +132,175 @@ export function TrainingPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-180px)] gap-0">
-      {/* Sidebar Navigation - Fixed left */}
-      <div className="w-64 flex-shrink-0 bg-white dark:bg-secondary-800 border-r border-secondary-200 dark:border-secondary-700 overflow-hidden">
-        <div className="p-4 border-b border-secondary-200 dark:border-secondary-700">
-          <h2 className="text-lg font-semibold text-secondary-900 dark:text-secondary-100 flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary-500" />
-            Training Materials
-          </h2>
-        </div>
-
-        <div className="overflow-y-auto h-[calc(100%-65px)] p-2">
-          {organizations.length === 0 ? (
-            <div className="text-center py-8 text-secondary-500">
-              <Building2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No training materials available</p>
-            </div>
+    <div className="flex h-[calc(100vh-140px)] -mx-4 sm:-mx-6 lg:-mx-8">
+      {/* Collapsible Sidebar */}
+      <motion.div
+        className="flex-shrink-0 bg-white dark:bg-secondary-800 border-r border-secondary-200 dark:border-secondary-700 overflow-hidden relative"
+        animate={{ width: sidebarCollapsed ? 48 : 280 }}
+        transition={{ duration: 0.2 }}
+      >
+        {/* Toggle Button */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="absolute top-3 right-2 z-10 p-1.5 rounded-lg bg-secondary-100 dark:bg-secondary-700 hover:bg-secondary-200 dark:hover:bg-secondary-600 transition-colors"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {sidebarCollapsed ? (
+            <PanelLeftOpen className="h-4 w-4 text-secondary-600 dark:text-secondary-400" />
           ) : (
-            <div className="space-y-1">
-              {organizations.map((org) => (
-                <div key={org.id}>
-                  {/* Organization Item */}
-                  <button
-                    onClick={() => toggleOrganization(org.id)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors"
-                  >
-                    {loadingOrgs.has(org.id) ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-primary-500" />
-                    ) : expandedOrgs.has(org.id) ? (
-                      <ChevronDown className="h-4 w-4 text-secondary-500" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-secondary-500" />
-                    )}
-                    <Building2 className="h-4 w-4 text-emerald-500" />
-                    <span className="font-medium text-secondary-900 dark:text-secondary-100 flex-1">
-                      {org.name}
-                    </span>
-                    <span className="text-xs text-secondary-500 bg-secondary-100 dark:bg-secondary-700 px-2 py-0.5 rounded-full">
-                      {org.courseCount}
-                    </span>
-                  </button>
-
-                  {/* Courses under Organization */}
-                  <AnimatePresence>
-                    {expandedOrgs.has(org.id) && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="ml-4 pl-4 border-l border-secondary-200 dark:border-secondary-700"
-                      >
-                        {coursesByOrg[org.id]?.map((course) => (
-                          <div key={course.id}>
-                            {/* Course Item */}
-                            <button
-                              onClick={() => toggleCourse(course.id)}
-                              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors"
-                            >
-                              {loadingCourses.has(course.id) ? (
-                                <Loader2 className="h-4 w-4 animate-spin text-primary-500" />
-                              ) : expandedCourses.has(course.id) ? (
-                                <ChevronDown className="h-4 w-4 text-secondary-500" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-secondary-500" />
-                              )}
-                              <GraduationCap className="h-4 w-4 text-primary-500" />
-                              <div className="flex-1 min-w-0">
-                                <span className="font-medium text-secondary-800 dark:text-secondary-200 block truncate">
-                                  {course.name}
-                                </span>
-                                <span className="text-xs text-secondary-500 truncate block">
-                                  {course.fullName}
-                                </span>
-                              </div>
-                              <span className="text-xs text-secondary-500 bg-secondary-100 dark:bg-secondary-700 px-2 py-0.5 rounded-full flex-shrink-0">
-                                {course.documentCount}
-                              </span>
-                            </button>
-
-                            {/* Documents under Course */}
-                            <AnimatePresence>
-                              {expandedCourses.has(course.id) && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="ml-4 pl-4 border-l border-secondary-200 dark:border-secondary-700"
-                                >
-                                  {documentsByCourse[course.id]?.map((doc) => (
-                                    <button
-                                      key={doc.id}
-                                      onClick={() => selectDocument(doc)}
-                                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors ${
-                                        selectedDocument?.id === doc.id
-                                          ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
-                                          : 'hover:bg-secondary-100 dark:hover:bg-secondary-700'
-                                      }`}
-                                    >
-                                      <FileText className="h-4 w-4 text-red-500" />
-                                      <div className="flex-1 min-w-0">
-                                        <span className="text-sm text-secondary-800 dark:text-secondary-200 block truncate">
-                                          {doc.originalName}
-                                        </span>
-                                        <span className="text-xs text-secondary-500">
-                                          {doc.pageCount} pages
-                                        </span>
-                                      </div>
-                                    </button>
-                                  ))}
-                                  {documentsByCourse[course.id]?.length === 0 && (
-                                    <div className="px-3 py-2 text-sm text-secondary-500">
-                                      No documents yet
-                                    </div>
-                                  )}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        ))}
-                        {coursesByOrg[org.id]?.length === 0 && (
-                          <div className="px-3 py-2 text-sm text-secondary-500">
-                            No courses yet
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
-            </div>
+            <PanelLeftClose className="h-4 w-4 text-secondary-600 dark:text-secondary-400" />
           )}
-        </div>
-      </div>
+        </button>
 
-      {/* Main Content - Document Viewer */}
-      <div className="flex-1 bg-white dark:bg-secondary-800 overflow-hidden">
+        {/* Sidebar Content */}
+        {!sidebarCollapsed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="h-full flex flex-col"
+          >
+            {/* Header */}
+            <div className="p-3 border-b border-secondary-200 dark:border-secondary-700 pr-10">
+              <h2 className="text-sm font-semibold text-secondary-900 dark:text-secondary-100 flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-primary-500" />
+                Training Materials
+              </h2>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-2">
+              {organizations.length === 0 ? (
+                <div className="text-center py-8 text-secondary-500">
+                  <Building2 className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No materials</p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {organizations.map((org) => (
+                    <div key={org.id}>
+                      {/* Organization Item */}
+                      <button
+                        onClick={() => toggleOrganization(org.id)}
+                        className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors"
+                      >
+                        {loadingOrgs.has(org.id) ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary-500 flex-shrink-0" />
+                        ) : expandedOrgs.has(org.id) ? (
+                          <ChevronDown className="h-3.5 w-3.5 text-secondary-500 flex-shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 text-secondary-500 flex-shrink-0" />
+                        )}
+                        <Building2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                        <span className="text-sm font-medium text-secondary-900 dark:text-secondary-100 flex-1 truncate">
+                          {org.name}
+                        </span>
+                        <span className="text-xs text-secondary-500 bg-secondary-100 dark:bg-secondary-700 px-1.5 py-0.5 rounded-full">
+                          {org.courseCount}
+                        </span>
+                      </button>
+
+                      {/* Courses */}
+                      <AnimatePresence>
+                        {expandedOrgs.has(org.id) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="ml-3 pl-3 border-l border-secondary-200 dark:border-secondary-700"
+                          >
+                            {coursesByOrg[org.id]?.map((course) => (
+                              <div key={course.id}>
+                                <button
+                                  onClick={() => toggleCourse(course.id)}
+                                  className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors"
+                                >
+                                  {loadingCourses.has(course.id) ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary-500 flex-shrink-0" />
+                                  ) : expandedCourses.has(course.id) ? (
+                                    <ChevronDown className="h-3.5 w-3.5 text-secondary-500 flex-shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5 text-secondary-500 flex-shrink-0" />
+                                  )}
+                                  <GraduationCap className="h-3.5 w-3.5 text-primary-500 flex-shrink-0" />
+                                  <span className="text-sm text-secondary-800 dark:text-secondary-200 flex-1 truncate">
+                                    {course.name}
+                                  </span>
+                                  <span className="text-xs text-secondary-500 bg-secondary-100 dark:bg-secondary-700 px-1.5 py-0.5 rounded-full">
+                                    {course.documentCount}
+                                  </span>
+                                </button>
+
+                                {/* Documents */}
+                                <AnimatePresence>
+                                  {expandedCourses.has(course.id) && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: 'auto', opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      transition={{ duration: 0.15 }}
+                                      className="ml-3 pl-3 border-l border-secondary-200 dark:border-secondary-700"
+                                    >
+                                      {documentsByCourse[course.id]?.map((doc) => (
+                                        <button
+                                          key={doc.id}
+                                          onClick={() => selectDocument(doc)}
+                                          className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left transition-colors ${
+                                            selectedDocument?.id === doc.id
+                                              ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300'
+                                              : 'hover:bg-secondary-100 dark:hover:bg-secondary-700'
+                                          }`}
+                                        >
+                                          <FileText className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
+                                          <div className="flex-1 min-w-0">
+                                            <span className="text-xs text-secondary-800 dark:text-secondary-200 block truncate">
+                                              {doc.originalName}
+                                            </span>
+                                            <span className="text-xs text-secondary-500">
+                                              {doc.pageCount} pages
+                                            </span>
+                                          </div>
+                                        </button>
+                                      ))}
+                                      {documentsByCourse[course.id]?.length === 0 && (
+                                        <div className="px-2 py-1.5 text-xs text-secondary-500">
+                                          No documents
+                                        </div>
+                                      )}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            ))}
+                            {coursesByOrg[org.id]?.length === 0 && (
+                              <div className="px-2 py-1.5 text-xs text-secondary-500">
+                                No courses
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Collapsed state - just show icon */}
+        {sidebarCollapsed && (
+          <div className="pt-12 px-2">
+            <div className="flex flex-col items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary-500" />
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+      {/* Main Content - Document Viewer - Full Width */}
+      <div className="flex-1 bg-secondary-50 dark:bg-secondary-900 overflow-hidden">
         {selectedDocument ? (
           <DocumentViewer document={selectedDocument} />
         ) : (
@@ -276,7 +310,7 @@ export function TrainingPage() {
               Select a Document
             </h3>
             <p className="text-secondary-500 max-w-md">
-              Choose a training document from the sidebar to start learning. You can view the content, generate explanations, flashcards, quizzes, and audio summaries.
+              Choose a training document from the sidebar to start learning.
             </p>
           </div>
         )}

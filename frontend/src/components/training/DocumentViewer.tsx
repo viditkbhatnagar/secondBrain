@@ -272,9 +272,14 @@ export function DocumentViewer({ document }: DocumentViewerProps) {
               </div>
             }
             error={
-              <div className="text-center text-red-500 p-8">
-                <p>Failed to load PDF</p>
-                <p className="text-sm mt-2">The document may be corrupted or inaccessible.</p>
+              <div className="text-center p-8">
+                <p className="text-red-500 font-medium">Failed to load PDF</p>
+                <p className="text-sm mt-2 text-secondary-600 dark:text-secondary-400">
+                  The document file may not be available in this environment.
+                </p>
+                <p className="text-xs mt-1 text-secondary-500 dark:text-secondary-500">
+                  If running locally, you may need to re-upload documents in the Admin panel.
+                </p>
               </div>
             }
           >

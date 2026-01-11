@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import fs from 'fs-extra';
 import path from 'path';
 import pdfParse from 'pdf-parse';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {
   TrainingOrganizationModel,
   TrainingCourseModel,
@@ -12,6 +13,13 @@ import {
   ITrainingDocument
 } from '../models/index';
 import { logger } from '../utils/logger';
+import { analyticsService } from './AnalyticsService';
+
+// GPT-4o pricing (per 1M tokens)
+const GPT4O_INPUT_COST_PER_1M = 2.50;
+const GPT4O_OUTPUT_COST_PER_1M = 10.00;
+// TTS-1 pricing (per 1M characters)
+const TTS1_COST_PER_1M_CHARS = 15.00;
 
 // Types for AI features
 export interface FlashcardContent {
@@ -37,6 +45,9 @@ export interface QuizContent {
   questions: QuizQuestion[];
 }
 
+// Training uploads directory
+const TRAINING_UPLOADS_DIR = path.join(__dirname, '../../uploads/training');
+
 /**
  * Training Service - Handles all training module operations
  * Organizations, Courses, Documents, and AI features (explain, flashcards, quiz, audio)
@@ -46,6 +57,40 @@ export class TrainingService {
   private static readonly model = 'gpt-4o'; // Using GPT-4o for training explanations
   private static readonly ttsModel = 'tts-1';
   private static readonly ttsVoice = 'alloy';
+
+  /**
+   * Resolve file path to handle different environments (production vs local)
+   * Database may have production paths while running locally
+   */
+  private static async resolveFilePath(document: ITrainingDocument): Promise<string | null> {
+    // First try the stored absolute path
+    if (await fs.pathExists(document.filePath)) {
+      return document.filePath;
+    }
+
+    // If not found, try to resolve using the filename from the path in local uploads directory
+    const filenameFromPath = path.basename(document.filePath);
+    const localPath = path.join(TRAINING_UPLOADS_DIR, filenameFromPath);
+
+    if (await fs.pathExists(localPath)) {
+      logger.info(`Resolved file path from production to local: ${filenameFromPath}`);
+      return localPath;
+    }
+
+    // Also try using the stored filename field directly
+    const altPath = path.join(TRAINING_UPLOADS_DIR, document.filename);
+    if (await fs.pathExists(altPath)) {
+      logger.info(`Resolved file path using filename field: ${document.filename}`);
+      return altPath;
+    }
+
+    logger.error(`Document file not found at any path:`, {
+      storedPath: document.filePath,
+      localPath,
+      altPath
+    });
+    return null;
+  }
 
   /**
    * Initialize the training service
@@ -58,6 +103,79 @@ export class TrainingService {
       apiKey: process.env.OPENAI_API_KEY,
     });
     logger.info('Training service initialized');
+  }
+
+  /**
+   * Calculate cost based on token usage
+   */
+  private static calculateCost(promptTokens: number, completionTokens: number): number {
+    const inputCost = (promptTokens / 1_000_000) * GPT4O_INPUT_COST_PER_1M;
+    const outputCost = (completionTokens / 1_000_000) * GPT4O_OUTPUT_COST_PER_1M;
+    return inputCost + outputCost;
+  }
+
+  /**
+   * Calculate TTS cost based on character count
+   */
+  private static calculateTtsCost(characterCount: number): number {
+    return (characterCount / 1_000_000) * TTS1_COST_PER_1M_CHARS;
+  }
+
+  /**
+   * Track AI usage for training features
+   */
+  private static async trackAiUsage(
+    feature: 'explain' | 'flashcards' | 'quiz' | 'audio',
+    promptTokens: number,
+    completionTokens: number,
+    responseTime: number,
+    documentId?: string
+  ): Promise<void> {
+    const totalTokens = promptTokens + completionTokens;
+    const cost = this.calculateCost(promptTokens, completionTokens);
+
+    await analyticsService.trackEvent(
+      'ai_response',
+      'training-session',  // Generic session for training
+      {
+        aiSource: 'training',
+        aiFeature: feature,
+        tokensUsed: totalTokens,
+        promptTokens,
+        completionTokens,
+        estimatedCost: cost,
+        responseTime,
+        documentId
+      }
+    );
+
+    logger.info(`Training AI usage tracked: ${feature}, tokens=${totalTokens}, cost=$${cost.toFixed(4)}`);
+  }
+
+  /**
+   * Track TTS usage for audio feature
+   */
+  private static async trackTtsUsage(
+    characterCount: number,
+    responseTime: number,
+    documentId?: string
+  ): Promise<void> {
+    const cost = this.calculateTtsCost(characterCount);
+
+    await analyticsService.trackEvent(
+      'ai_response',
+      'training-session',
+      {
+        aiSource: 'training',
+        aiFeature: 'audio',
+        tokensUsed: characterCount,  // Store character count in tokensUsed for simplicity
+        estimatedCost: cost,
+        responseTime,
+        documentId
+      }
+    );
+
+    logger.info(`Training TTS usage tracked: chars=${characterCount}, cost=$${cost.toFixed(4)}`);
   }
 
   // ========================================
@@ -291,8 +409,9 @@ export class TrainingService {
 
     // Delete the physical file
     try {
-      if (await fs.pathExists(doc.filePath)) {
-        await fs.remove(doc.filePath);
+      const resolvedPath = await this.resolveFilePath(doc);
+      if (resolvedPath) {
+        await fs.remove(resolvedPath);
       }
     } catch (error) {
       logger.warn(`Failed to delete file: ${doc.filePath}`, error);
@@ -316,7 +435,8 @@ export class TrainingService {
   // ========================================
 
   /**
-   * Extract text content from a specific page of a PDF
+   * Extract text content from a specific page of a PDF using pdfjs-dist
+   * This properly extracts text from only the requested page
    */
   static async extractPageContent(documentId: string, pageNumber: number): Promise<string> {
     const doc = await this.getDocumentById(documentId);
@@ -324,40 +444,78 @@ export class TrainingService {
       throw new Error('Document not found');
     }
 
-    if (!await fs.pathExists(doc.filePath)) {
+    // Resolve the file path to handle different environments
+    const resolvedPath = await this.resolveFilePath(doc);
+    if (!resolvedPath) {
       throw new Error('Document file not found');
     }
 
-    const dataBuffer = await fs.readFile(doc.filePath);
+    const dataBuffer = await fs.readFile(resolvedPath);
+    const uint8Array = new Uint8Array(dataBuffer);
 
-    // pdf-parse doesn't support page-specific extraction directly
-    // We'll parse the full PDF and try to segment by page
-    const pdfData = await pdfParse(dataBuffer, {
-      // Get page-by-page text
-      pagerender: (pageData: any) => {
-        return pageData.getTextContent().then((textContent: any) => {
-          let text = '';
-          for (const item of textContent.items) {
-            text += item.str + ' ';
-          }
-          return text;
-        });
-      }
+    // Use pdfjs-dist to load the PDF and extract specific page content
+    // Disable worker for Node.js environment
+    const loadingTask = pdfjsLib.getDocument({
+      data: uint8Array,
+      useSystemFonts: true,
+      disableFontFace: true,
+      isEvalSupported: false,
     });
 
-    // Split content by page markers or estimate based on position
-    // This is a simplified approach - for better accuracy, use pdf-lib or similar
-    const pages = pdfData.text.split(/\f|\n{4,}/); // Form feed or multiple newlines as page separator
+    const pdfDocument = await loadingTask.promise;
+    const totalPages = pdfDocument.numPages;
 
-    if (pageNumber < 1 || pageNumber > pages.length) {
-      // If page extraction fails, return a portion of the full text
-      const charsPerPage = Math.ceil(pdfData.text.length / (doc.pageCount || 1));
-      const startIdx = (pageNumber - 1) * charsPerPage;
-      const endIdx = startIdx + charsPerPage;
-      return pdfData.text.substring(startIdx, endIdx).trim();
+    if (pageNumber < 1 || pageNumber > totalPages) {
+      throw new Error(`Invalid page number. Document has ${totalPages} pages.`);
     }
 
-    return pages[pageNumber - 1]?.trim() || '';
+    // Get the specific page
+    const page = await pdfDocument.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+
+    // Extract text items and join them
+    // Group text by y-position to maintain line structure
+    const textItems = textContent.items as any[];
+
+    // Sort by y position (descending, since PDF y-axis is bottom-up) then x position
+    const sortedItems = textItems
+      .filter((item: any) => item.str && item.str.trim())
+      .sort((a: any, b: any) => {
+        const yDiff = b.transform[5] - a.transform[5]; // y position (descending)
+        if (Math.abs(yDiff) > 5) return yDiff; // Different lines
+        return a.transform[4] - b.transform[4]; // Same line, sort by x
+      });
+
+    // Group items into lines based on y-position proximity
+    const lines: string[] = [];
+    let currentLine: string[] = [];
+    let lastY: number | null = null;
+
+    for (const item of sortedItems) {
+      const y = item.transform[5];
+
+      if (lastY !== null && Math.abs(lastY - y) > 5) {
+        // New line - save current line and start fresh
+        if (currentLine.length > 0) {
+          lines.push(currentLine.join(' '));
+        }
+        currentLine = [];
+      }
+
+      currentLine.push(item.str.trim());
+      lastY = y;
+    }
+
+    // Don't forget the last line
+    if (currentLine.length > 0) {
+      lines.push(currentLine.join(' '));
+    }
+
+    const pageText = lines.join('\n').trim();
+
+    logger.info(`Extracted ${pageText.length} chars from page ${pageNumber} of document ${documentId}`);
+
+    return pageText;
   }
 
   /**
@@ -382,6 +540,7 @@ export class TrainingService {
    * Generate explanation for a specific page
    */
   static async explainPage(documentId: string, pageNumber: number): Promise<string> {
+    const startTime = Date.now();
     const pageContent = await this.extractPageContent(documentId, pageNumber);
 
     if (!pageContent || pageContent.trim().length < 50) {
@@ -409,6 +568,20 @@ EXPLANATION:`;
       messages: [{ role: 'user', content: prompt }]
     });
 
+    const responseTime = Date.now() - startTime;
+
+    // Track AI usage
+    const usage = response.usage;
+    if (usage) {
+      await this.trackAiUsage(
+        'explain',
+        usage.prompt_tokens,
+        usage.completion_tokens,
+        responseTime,
+        documentId
+      );
+    }
+
     return response.choices[0]?.message?.content?.trim() || 'Unable to generate explanation';
   }
 
@@ -420,6 +593,10 @@ EXPLANATION:`;
     pageNumber: number,
     type: 'explanation' | 'keyTerms' | 'qa' | 'all' = 'all'
   ): Promise<FlashcardContent> {
+    const startTime = Date.now();
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+
     const pageContent = await this.extractPageContent(documentId, pageNumber);
 
     if (!pageContent || pageContent.trim().length < 50) {
@@ -448,6 +625,11 @@ FLASHCARD EXPLANATION:`;
         messages: [{ role: 'user', content: explanationPrompt }]
       });
       flashcard.content.explanation = expResponse.choices[0]?.message?.content?.trim() || '';
+
+      if (expResponse.usage) {
+        totalPromptTokens += expResponse.usage.prompt_tokens;
+        totalCompletionTokens += expResponse.usage.completion_tokens;
+      }
     }
 
     // Generate key terms
@@ -466,6 +648,11 @@ JSON ARRAY:`;
         temperature: 0.7,
         messages: [{ role: 'user', content: termsPrompt }]
       });
+
+      if (termsResponse.usage) {
+        totalPromptTokens += termsResponse.usage.prompt_tokens;
+        totalCompletionTokens += termsResponse.usage.completion_tokens;
+      }
 
       try {
         const termsText = termsResponse.choices[0]?.message?.content?.trim() || '[]';
@@ -496,6 +683,11 @@ JSON ARRAY:`;
         messages: [{ role: 'user', content: qaPrompt }]
       });
 
+      if (qaResponse.usage) {
+        totalPromptTokens += qaResponse.usage.prompt_tokens;
+        totalCompletionTokens += qaResponse.usage.completion_tokens;
+      }
+
       try {
         const qaText = qaResponse.choices[0]?.message?.content?.trim() || '[]';
         const jsonMatch = qaText.match(/\[[\s\S]*\]/);
@@ -507,6 +699,18 @@ JSON ARRAY:`;
       }
     }
 
+    // Track total AI usage for flashcards
+    const responseTime = Date.now() - startTime;
+    if (totalPromptTokens > 0 || totalCompletionTokens > 0) {
+      await this.trackAiUsage(
+        'flashcards',
+        totalPromptTokens,
+        totalCompletionTokens,
+        responseTime,
+        documentId
+      );
+    }
+
     return flashcard;
   }
 
@@ -514,6 +718,7 @@ JSON ARRAY:`;
    * Generate quiz questions for a page
    */
   static async generateQuiz(documentId: string, pageNumber: number): Promise<QuizContent> {
+    const startTime = Date.now();
     const pageContent = await this.extractPageContent(documentId, pageNumber);
 
     if (!pageContent || pageContent.trim().length < 50) {
@@ -560,6 +765,20 @@ JSON ARRAY:`;
       messages: [{ role: 'user', content: prompt }]
     });
 
+    const responseTime = Date.now() - startTime;
+
+    // Track AI usage
+    const usage = response.usage;
+    if (usage) {
+      await this.trackAiUsage(
+        'quiz',
+        usage.prompt_tokens,
+        usage.completion_tokens,
+        responseTime,
+        documentId
+      );
+    }
+
     const responseText = response.choices[0]?.message?.content?.trim() || '[]';
 
     try {
@@ -582,6 +801,8 @@ JSON ARRAY:`;
     documentId: string,
     pageNumber: number
   ): Promise<Buffer> {
+    const startTime = Date.now();
+
     // Extract page content for detailed audio explanation
     const pageContent = await this.extractPageContent(documentId, pageNumber);
 
@@ -616,6 +837,20 @@ AUDIO LECTURE SCRIPT:`;
       messages: [{ role: 'user', content: audioPrompt }]
     });
 
+    const scriptGenerationTime = Date.now() - startTime;
+
+    // Track GPT-4o usage for script generation
+    const usage = response.usage;
+    if (usage) {
+      await this.trackAiUsage(
+        'audio',
+        usage.prompt_tokens,
+        usage.completion_tokens,
+        scriptGenerationTime,
+        documentId
+      );
+    }
+
     const audioScript = response.choices[0]?.message?.content?.trim();
 
     if (!audioScript || audioScript.length < 100) {
@@ -625,6 +860,8 @@ AUDIO LECTURE SCRIPT:`;
     // Limit text length for TTS (max ~4096 chars)
     const textForAudio = audioScript.substring(0, 4000);
 
+    const ttsStartTime = Date.now();
+
     const mp3Response = await this.openai.audio.speech.create({
       model: this.ttsModel,
       voice: this.ttsVoice,
@@ -632,6 +869,11 @@ AUDIO LECTURE SCRIPT:`;
       response_format: 'mp3',
       speed: 1.0
     });
+
+    const ttsTime = Date.now() - ttsStartTime;
+
+    // Track TTS usage
+    await this.trackTtsUsage(textForAudio.length, ttsTime, documentId);
 
     // Convert response to Buffer
     const arrayBuffer = await mp3Response.arrayBuffer();

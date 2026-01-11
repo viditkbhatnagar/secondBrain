@@ -629,6 +629,204 @@ class AnalyticsService {
       }))
     };
   }
+
+  // GPT-4o/GPT-5 Pricing (per 1M tokens)
+  private static readonly GPT_INPUT_COST_PER_1M = 2.50;   // $2.50 per 1M input tokens
+  private static readonly GPT_OUTPUT_COST_PER_1M = 10.00; // $10.00 per 1M output tokens
+
+  // Calculate cost from tokens (when estimatedCost is not stored)
+  private calculateCostFromTokens(
+    totalTokens: number,
+    promptTokens: number = 0,
+    completionTokens: number = 0
+  ): number {
+    // If we have prompt/completion breakdown, use it
+    if (promptTokens > 0 || completionTokens > 0) {
+      const inputCost = (promptTokens / 1_000_000) * AnalyticsService.GPT_INPUT_COST_PER_1M;
+      const outputCost = (completionTokens / 1_000_000) * AnalyticsService.GPT_OUTPUT_COST_PER_1M;
+      return inputCost + outputCost;
+    }
+
+    // Otherwise estimate using typical mix (70% input, 30% output)
+    const estimatedInputTokens = totalTokens * 0.7;
+    const estimatedOutputTokens = totalTokens * 0.3;
+    const inputCost = (estimatedInputTokens / 1_000_000) * AnalyticsService.GPT_INPUT_COST_PER_1M;
+    const outputCost = (estimatedOutputTokens / 1_000_000) * AnalyticsService.GPT_OUTPUT_COST_PER_1M;
+    return inputCost + outputCost;
+  }
+
+  // Get bifurcated cost stats (chat vs training)
+  async getCostStats(days: number = 30): Promise<{
+    chat: {
+      totalTokens: number;
+      promptTokens: number;
+      completionTokens: number;
+      estimatedCost: number;
+      requestCount: number;
+    };
+    training: {
+      totalTokens: number;
+      promptTokens: number;
+      completionTokens: number;
+      estimatedCost: number;
+      requestCount: number;
+      byFeature: {
+        explain: { tokens: number; cost: number; count: number };
+        flashcards: { tokens: number; cost: number; count: number };
+        quiz: { tokens: number; cost: number; count: number };
+        audio: { tokens: number; cost: number; count: number };
+      };
+    };
+    total: {
+      totalTokens: number;
+      estimatedCost: number;
+      requestCount: number;
+    };
+  }> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Get chat AI usage (where aiSource is 'chat' or null/undefined for legacy data)
+    const chatStats = await AnalyticsEvent.aggregate([
+      {
+        $match: {
+          eventType: 'ai_response',
+          timestamp: { $gte: startDate },
+          $or: [
+            { 'metadata.aiSource': 'chat' },
+            { 'metadata.aiSource': { $exists: false } },
+            { 'metadata.aiSource': null }
+          ]
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalTokens: { $sum: { $ifNull: ['$metadata.tokensUsed', 0] } },
+          promptTokens: { $sum: { $ifNull: ['$metadata.promptTokens', 0] } },
+          completionTokens: { $sum: { $ifNull: ['$metadata.completionTokens', 0] } },
+          storedCost: { $sum: { $ifNull: ['$metadata.estimatedCost', 0] } },
+          requestCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Get training AI usage
+    const trainingStats = await AnalyticsEvent.aggregate([
+      {
+        $match: {
+          eventType: 'ai_response',
+          timestamp: { $gte: startDate },
+          'metadata.aiSource': 'training'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalTokens: { $sum: { $ifNull: ['$metadata.tokensUsed', 0] } },
+          promptTokens: { $sum: { $ifNull: ['$metadata.promptTokens', 0] } },
+          completionTokens: { $sum: { $ifNull: ['$metadata.completionTokens', 0] } },
+          storedCost: { $sum: { $ifNull: ['$metadata.estimatedCost', 0] } },
+          requestCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Get training stats by feature
+    const trainingByFeature = await AnalyticsEvent.aggregate([
+      {
+        $match: {
+          eventType: 'ai_response',
+          timestamp: { $gte: startDate },
+          'metadata.aiSource': 'training',
+          'metadata.aiFeature': { $exists: true }
+        }
+      },
+      {
+        $group: {
+          _id: '$metadata.aiFeature',
+          tokens: { $sum: { $ifNull: ['$metadata.tokensUsed', 0] } },
+          cost: { $sum: { $ifNull: ['$metadata.estimatedCost', 0] } },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Build feature breakdown
+    const featureBreakdown: any = {
+      explain: { tokens: 0, cost: 0, count: 0 },
+      flashcards: { tokens: 0, cost: 0, count: 0 },
+      quiz: { tokens: 0, cost: 0, count: 0 },
+      audio: { tokens: 0, cost: 0, count: 0 }
+    };
+
+    trainingByFeature.forEach((item: any) => {
+      if (featureBreakdown[item._id]) {
+        featureBreakdown[item._id] = {
+          tokens: item.tokens,
+          cost: item.cost,
+          count: item.count
+        };
+      }
+    });
+
+    const chat = chatStats[0] || {
+      totalTokens: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      storedCost: 0,
+      requestCount: 0
+    };
+
+    const training = trainingStats[0] || {
+      totalTokens: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      storedCost: 0,
+      requestCount: 0
+    };
+
+    // Calculate cost from tokens if stored cost is 0 (for backwards compatibility)
+    const chatCost = chat.storedCost > 0
+      ? chat.storedCost
+      : this.calculateCostFromTokens(chat.totalTokens, chat.promptTokens, chat.completionTokens);
+
+    const trainingCost = training.storedCost > 0
+      ? training.storedCost
+      : this.calculateCostFromTokens(training.totalTokens, training.promptTokens, training.completionTokens);
+
+    // Also recalculate feature costs if needed
+    for (const feature of Object.keys(featureBreakdown)) {
+      const f = featureBreakdown[feature];
+      if (f.cost === 0 && f.tokens > 0) {
+        f.cost = this.calculateCostFromTokens(f.tokens, 0, 0);
+      }
+    }
+
+    return {
+      chat: {
+        totalTokens: chat.totalTokens,
+        promptTokens: chat.promptTokens,
+        completionTokens: chat.completionTokens,
+        estimatedCost: Math.round(chatCost * 10000) / 10000,
+        requestCount: chat.requestCount
+      },
+      training: {
+        totalTokens: training.totalTokens,
+        promptTokens: training.promptTokens,
+        completionTokens: training.completionTokens,
+        estimatedCost: Math.round(trainingCost * 10000) / 10000,
+        requestCount: training.requestCount,
+        byFeature: featureBreakdown
+      },
+      total: {
+        totalTokens: chat.totalTokens + training.totalTokens,
+        estimatedCost: Math.round((chatCost + trainingCost) * 10000) / 10000,
+        requestCount: chat.requestCount + training.requestCount
+      }
+    };
+  }
 }
 
 export const analyticsService = new AnalyticsService();

@@ -78,6 +78,34 @@ export interface RealTimeStats {
   }>;
 }
 
+export interface CostStats {
+  chat: {
+    totalTokens: number;
+    promptTokens: number;
+    completionTokens: number;
+    estimatedCost: number;
+    requestCount: number;
+  };
+  training: {
+    totalTokens: number;
+    promptTokens: number;
+    completionTokens: number;
+    estimatedCost: number;
+    requestCount: number;
+    byFeature: {
+      explain: { tokens: number; cost: number; count: number };
+      flashcards: { tokens: number; cost: number; count: number };
+      quiz: { tokens: number; cost: number; count: number };
+      audio: { tokens: number; cost: number; count: number };
+    };
+  };
+  total: {
+    totalTokens: number;
+    estimatedCost: number;
+    requestCount: number;
+  };
+}
+
 const ANALYTICS_BASE = `${API_BASE_URL}/analytics`;
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -129,6 +157,10 @@ export const analyticsApi = {
 
   getRealTime: async (): Promise<RealTimeStats> => {
     return fetchJson<RealTimeStats>(`${ANALYTICS_BASE}/realtime`);
+  },
+
+  getCosts: async (days: number = 30): Promise<CostStats> => {
+    return fetchJson<CostStats>(`${ANALYTICS_BASE}/costs?days=${days}`);
   },
 
   trackEvent: async (

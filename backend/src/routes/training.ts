@@ -152,14 +152,42 @@ trainingRouter.get('/documents/:id/file', async (req, res) => {
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    if (!await fs.pathExists(document.filePath)) {
-      return res.status(404).json({ error: 'Document file not found' });
+    // Try multiple paths to handle different environments
+    let resolvedPath = document.filePath;
+
+    // First try the stored absolute path
+    if (!await fs.pathExists(resolvedPath)) {
+      // If not found, try to resolve using the filename in local uploads directory
+      // This handles the case where DB has production paths but we're running locally
+      const filename = path.basename(document.filePath);
+      const localPath = path.join(trainingUploadsDir, filename);
+
+      if (await fs.pathExists(localPath)) {
+        resolvedPath = localPath;
+        logger.info(`Resolved file path from production to local: ${filename}`);
+      } else {
+        // Also try using the stored filename field directly
+        const altPath = path.join(trainingUploadsDir, document.filename);
+        if (await fs.pathExists(altPath)) {
+          resolvedPath = altPath;
+          logger.info(`Resolved file path using filename field: ${document.filename}`);
+        } else {
+          logger.error(`Document file not found at any path:`, {
+            storedPath: document.filePath,
+            localPath,
+            altPath
+          });
+          return res.status(404).json({ error: 'Document file not found' });
+        }
+      }
     }
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${document.originalName}"`);
+    // Add CORS headers for PDF viewing from react-pdf
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type');
 
-    const fileStream = fs.createReadStream(document.filePath);
+    const fileStream = fs.createReadStream(resolvedPath);
     fileStream.pipe(res);
   } catch (error: any) {
     logger.error('Failed to serve document file:', error);
