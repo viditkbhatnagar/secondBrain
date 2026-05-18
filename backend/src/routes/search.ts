@@ -1121,7 +1121,7 @@ searchRouter.get('/agent/stream', aiLimiter, aiSpeedLimiter, async (req: Request
     res.end();
   } catch (error) {
     logger.error('Agent stream error:', { error: (error as any).message, requestId: req.requestId });
-    try { res.write(`event: error\n` + `data: ${JSON.stringify({ message: (error as any).message })}\n\n`); } catch {}
+    try { res.write(`event: error\n` + `data: ${JSON.stringify({ error: (error as any).message, message: (error as any).message })}\n\n`); } catch {}
     res.end();
   }
 });
